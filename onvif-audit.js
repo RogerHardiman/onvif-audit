@@ -17,6 +17,7 @@ var Cam = require('onvif').Cam;
 var flow = require('nimble');
 var http = require('http');
 var args = require('commander');
+var fs = require('fs');
 
 
 // Show Version
@@ -102,6 +103,19 @@ function perform_audit(ip_address, port, username, password) {
 
     console.log('Scanning IP addresses from ' + ip_start + ' to ' + ip_end);
 
+    var log_filename = 'audit_report.txt';
+    var log_fd;
+
+    fs.open(log_filename,'w',function(err,fd) {
+        if (err) {
+          console.log('ERROR - cannot create output file ' + log_filename);
+          console.log(err);
+          console.log('');
+          process.exit(1);
+        }
+        log_fd = fd;
+        console.log('Log File Open ('+log_filename+')');
+      });
 
     var ip_list = generate_range(ip_start, ip_end);
 
@@ -242,6 +256,16 @@ function perform_audit(ip_address, port, username, password) {
                         console.log('First Live Multicast Stream: = ' + got_live_stream_multicast.uri);
                     }
                     console.log('------------------------------');
+
+                    // write to log file if 'fd' is not undefined
+                    msg = 'Host: ' + ip_entry + ' Port: ' + port + '\r\n'
+                    + 'Date: = ' + got_date + '\r\n'
+                    + 'Info: = ' + JSON.stringify(got_info) + '\r\n';
+                    fs.write(log_fd,msg,function(err) {
+                    if (err)
+                        console.log('Error writing to file');
+                    });
+
                     callback();
                 },
 
