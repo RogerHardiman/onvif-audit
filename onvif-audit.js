@@ -18,6 +18,8 @@ var flow = require('nimble');
 var http = require('http');
 var args = require('commander');
 var fs = require('fs');
+var dateTime = require('node-datetime');
+var path = require('path');
 
 
 // Show Version
@@ -44,6 +46,15 @@ if (!args.filename && !args.ipaddress) {
     process.exit(1);
 }
 
+var time_now = dateTime.create();
+var folder = 'onvif_audit_report_' + time_now.format('Y_m_d_H_M_S');
+
+try {
+    fs.mkdirSync(folder);
+} catch(e) {
+}
+
+
 if (args.ip) {
     // Connection Details and IP Address supplied in the Command Line
     IPADDRESS = args.ipaddress;
@@ -53,7 +64,7 @@ if (args.ip) {
 
 
     // Perform an Audit of all the cameras in the IP address Range
-    perform_audit(IPADDRESS, PORT, USERNAME, PASSWORD);
+    perform_audit(IPADDRESS, PORT, USERNAME, PASSWORD, folder);
 }
 
 if (args.filename) {
@@ -69,7 +80,7 @@ if (args.filename) {
             if (item.username) USERNAME = item.username;
             if (item.password) PASSWORD = item.password;
 
-            perform_audit(IPADDRESS, PORT, USERNAME, PASSWORD);
+            perform_audit(IPADDRESS, PORT, USERNAME, PASSWORD, folder);
         }
         );
     }
@@ -79,7 +90,7 @@ if (args.filename) {
 
 
 
-function perform_audit(ip_address, port, username, password) {
+function perform_audit(ip_address, port, username, password, folder) {
 
     var ip_start;
     var ip_end;
@@ -102,20 +113,6 @@ function perform_audit(ip_address, port, username, password) {
 
 
     console.log('Scanning IP addresses from ' + ip_start + ' to ' + ip_end);
-
-    var log_filename = 'audit_report.txt';
-    var log_fd;
-
-    fs.open(log_filename,'w',function(err,fd) {
-        if (err) {
-          console.log('ERROR - cannot create output file ' + log_filename);
-          console.log(err);
-          console.log('');
-          process.exit(1);
-        }
-        log_fd = fd;
-        console.log('Log File Open ('+log_filename+')');
-      });
 
     var ip_list = generate_range(ip_start, ip_end);
 
@@ -176,7 +173,7 @@ function perform_audit(ip_address, port, username, password) {
                             const url = require('url');
                             const request = require('request');
 
-                            var filename = 'snapshot_' + ip_entry + '.jpg';
+                            var filename = folder + path.sep + 'snapshot_' + ip_entry + '.jpg';
                             var uri = url.parse(got_snapshot.uri);
                             uri.username = username;
                             uri.password = password;
@@ -257,14 +254,48 @@ function perform_audit(ip_address, port, username, password) {
                     }
                     console.log('------------------------------');
 
-                    // write to log file if 'fd' is not undefined
-                    msg = 'Host: ' + ip_entry + ' Port: ' + port + '\r\n'
-                    + 'Date: = ' + got_date + '\r\n'
-                    + 'Info: = ' + JSON.stringify(got_info) + '\r\n';
-                    fs.write(log_fd,msg,function(err) {
-                    if (err)
-                        console.log('Error writing to file');
-                    });
+                    var log_filename = folder + path.sep + 'camera_report_' + ip_entry  + '.txt';
+                    var log_fd;
+                
+                    fs.open(log_filename,'w',function(err,fd) {
+                        if (err) {
+                          console.log('ERROR - cannot create output file ' + log_filename);
+                          console.log(err);
+                          console.log('');
+                          process.exit(1);
+                        }
+                        log_fd = fd;
+                        console.log('Log File Open ('+log_filename+')');
+
+                        // write to log file
+                        let msg = 'Host:= ' + ip_entry + ' Port:= ' + port + '\r\n';
+                        if (got_date) {
+                            msg += 'Date:= ' + got_date + '\r\n';
+                        } else {
+                            msg += 'Date:= unknown\r\n';
+                        }
+                        if (got_info) {
+                            msg += 'Manufacturer:= ' + got_info.manufacturer + '\r\n';
+                            msg += 'Model:= ' + got_info.model + '\r\n';
+                            msg += 'Firmware Version:= ' + got_info.firmwareVersion + '\r\n';
+                            msg += 'Serial Number:= ' + got_info.serialNumber + '\r\n';
+                            msg += 'Hardware ID:= ' + got_info.hardwareId + '\r\n';
+                        } else {
+                            msg += 'Manufacturer:= unknown\r\n';
+                            msg += 'Model:= unknown\r\n';
+                            msg += 'Firmware Version:= unknown\r\n';
+                            msg += 'Serial Number:= unknown\r\n';
+                            msg += 'Hardware ID:= unknown\r\n';
+                        }
+                        fs.write(log_fd,msg,function(err) {
+                        if (err)
+                            console.log('Error writing to file');
+                        });
+
+                      });
+                
+                
+
 
                     callback();
                 },

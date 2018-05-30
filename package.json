@@ -17,7 +17,9 @@
     "url": "https://github.com/rogerhardiman/onvif-audit.git"
   },
   "dependencies": {
+    "node-datetime": "^2.0.6",
     "onvif": "^0.6.0",
+    "path": "^0.12.7",
     "request": "^2.87.0",
     "require": "^2.4.20"
   },
