@@ -26,13 +26,11 @@ var path = require('path');
 var version = require('./package.json').version;
 args.version(version);
 args.description('ONVIF Camera Audit');
-args.option('-f, --filename <value>', 'IP Address List filename');
+args.option('-f, --filename <value>', 'Filename of JSON file with IP Address List');
 args.option('-i, --ipaddress <value>', 'IP Address (x.x.x.x) or IP Address Range (x.x.x.x-y.y.y.y)');
 args.option('-P, --port <value>', 'ONVIF Port. Default 80', parseInt, 80);
 args.option('-u, --username <value>', 'ONVIF Username');
 args.option('-p, --password <value>', 'ONVIF Password');
-args.option('--verbose', 'Show verbose log information');
-args.option('--nolog', 'Do not write to the log file. Default is to write logs');
 args.parse(process.argv);
 
 if (!args) {
@@ -55,7 +53,7 @@ try {
 }
 
 
-if (args.ip) {
+if (args.ipaddress) {
     // Connection Details and IP Address supplied in the Command Line
     IPADDRESS = args.ipaddress;
     if (args.port) PORT = args.port;

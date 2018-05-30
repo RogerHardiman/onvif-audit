@@ -22,7 +22,7 @@
             "request": "launch",
             "name": "Launch Program with IP Range",
             "program": "${workspaceFolder}/onvif-audit.js",
-            "args": ["--ip","192.168.1.1-192.168.1.5"]
+            "args": ["--ipaddress","192.168.1.1-192.168.1.5","--username","onuser","--password","onpass"]
         }
     ]
 }
