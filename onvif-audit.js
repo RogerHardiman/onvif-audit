@@ -155,6 +155,19 @@ function perform_audit(ip_address, port, username, password) {
                     try {
                         cam_obj.getSnapshotUri({}, function (err, result, xml) {
                             if (!err) got_snapshot = result;
+
+                            var http = require('http');
+                            var fs = require('fs');
+                            var filename = 'snapshot' + ip_entry + '.jpg';
+                            var url = got_snapshot.uri;
+                            var file = fs.createWriteStream(filename);
+                            file.on('finish', function() {
+                                file.close(cb);
+                              });
+                            var request = http.get(url, function(response) {
+                                response.pipe(file);
+                            });
+
                             callback();
                         });
                     } catch (err) { callback(); }
@@ -201,6 +214,7 @@ function perform_audit(ip_address, port, username, password) {
                     console.log('Info: = ' + JSON.stringify(got_info));
                     if (got_snapshot) {
                         console.log('Snapshot URI: =                ' + got_snapshot.uri);
+
                     }
                     if (got_live_stream_tcp) {
                         console.log('First Live TCP Stream: =       ' + got_live_stream_tcp.uri);

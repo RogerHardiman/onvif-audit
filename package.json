@@ -4,8 +4,7 @@
   "author": "Roger Hardiman <contact@rjh.org.uk>",
   "description": "ONVIF Camera Audit Tool",
   "main": "/audit.js",
-  "scripts": {
-  },
+  "scripts": {},
   "contributors": [
     {
       "name": "Roger Hardiman",
@@ -18,7 +17,8 @@
     "url": "https://github.com/rogerhardiman/onvif-audit.git"
   },
   "dependencies": {
-    "onvif": "^0.6.0"
+    "onvif": "^0.6.0",
+    "require": "^2.4.20"
   },
   "keywords": [
     "onvif",
