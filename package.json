@@ -1,0 +1,47 @@
+{
+  "name": "onvif-site-audit",
+  "version": "0.1.0",
+  "author": "Roger Hardiman <contact@rjh.org.uk>",
+  "description": "ONVIF Camera Audit Tool",
+  "main": "/audit.js",
+  "scripts": {
+  },
+  "contributors": [
+    {
+      "name": "Roger Hardiman",
+      "email": "contact@rjh.org.uk",
+      "url": "http://www.rjh.org.uk"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rogerhardiman/onvif-audit.git"
+  },
+  "dependencies": {
+    "onvif": "^0.6.0"
+  },
+  "keywords": [
+    "onvif",
+    "video",
+    "PTZ",
+    "camera",
+    "RTSP"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=6.0"
+  },
+  "devDependencies": {
+    "coffeescript": "^1.9.3",
+    "coveralls": ">=2.11.2",
+    "dot": "^1.0.3",
+    "istanbul": ">=0.3.5",
+    "jscs": "^1.13.1",
+    "jsdoc": "^3.3.0",
+    "jshint": "^2.7.0",
+    "keypress": "^0.2.1",
+    "mocha": ">=2.1.0",
+    "mocha-lcov-reporter": "0.0.1",
+    "nimble": "^0.0.2"
+  }
+}

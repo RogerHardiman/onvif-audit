@@ -1,0 +1,46 @@
+{
+	"cameralist": [
+		{
+			"ipaddress": "193.159.244.134",
+			"port": "80",
+			"username": "service",
+			"password": "Xbks8tr8vT",
+			"comment": "Bosch"
+		},
+		{
+			"ipaddress": "193.159.244.132-193.159.244.132",
+			"port": "80",
+			"username": "service",
+			"password": "Xbks8tr8vT",
+			"comment": "Bosch"
+		},
+		{
+			"ipaddress": "195.60.68.239",
+			"port": "81",
+			"username": "operator",
+			"password": "Onv!f2018",
+			"comment": "Axis"
+		},
+		{
+			"ipaddress": "123.157.208.28",
+			"port": "81",
+			"username": "admin",
+			"password": "abcd1234",
+			"comment": "HikVision"
+		},
+		{
+			"ipaddress": "61.164.52.166",
+			"port": "88",
+			"username": "admin",
+			"password": "Uniview2018",
+			"comment": "UniView"
+		},
+		{
+			"ipaddress": "60.191.94.122-60.191.94.122",
+			"port": "8086",
+			"username": "admin",
+			"password": "a1b2c3d4",
+			"comment": "Dahua"
+		}
+	]
+}
