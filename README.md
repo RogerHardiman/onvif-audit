@@ -32,7 +32,7 @@ cameralist.json contains this....
 			"ipaddress": "1.2.3.20-1.2.3.30",
 			"port": "80",
 			"username": "service",
-			"password": "Xbks8tr8vT",
+			"password": "password",
 			"comment": "Bosch"
 		},
 		{
