@@ -1,14 +1,20 @@
 # onvif-audit
 
-onvif-audit will scan a network looking for ONVIF cameras and create an audit log containing
+onvif-audit will scan a network looking for ONVIF cameras and create an audit log folder containing
 
-* Camera Make and Model
-* Camera Time (to check for Time Sync errors)
+* Text File which reports the Camera Make and Model and the Camera Time (to check Time Sync Errors)
 * JPEG Snapshot of the camera view
 
-It can be controlled from the Command Line or via a Configuration File
+The Audit can be controlled from the Command Line or via a Configuration File
+
+A full list of commands can be obtained with the -h option
+`
+node onvif-audit.js -h
+`
+
 
 # Command Line
+Command Line parameters are used to provide a single IP address or a range of IP addresses to scan, along with Username and Password.
 Example to scan a network for all cameras in the range 192.168.1.1 to 192.168.1.254
 
 `
@@ -17,8 +23,8 @@ node onvif-audit.js --ipaddress 192.168.1.1-192.168.1.254 --username user --pass
 
 
 # Config File
-This is a JSON formatted file
-An example is shown below which scans the Range of IPs from 1.2.3.20 to 1.2.3.30 and also scans a single address at 11.22.33.44
+A JSON formatted Configuration File is used to give the Audit tool a list of cameras to scan.
+An example is shown below which first scans the range of IPs from 1.2.3.20 to 1.2.3.30 and then scans a single address of 11.22.33.44
 
 `
 node onvif-audit.js --filename ./camera_list.json
@@ -47,5 +53,6 @@ cameralist.json contains this....
 ```
 
 # ONVIF Discovery vrs IP address range scan
-ONVIF supports Discovery via WS-Discover protocol. This is great in the local subnet but does not work over routed networks with different IP address ranges.
-This is why this tool uses IP address ranges to scan the network
+ONVIF supports Discovery via WS-Discover protocol. This is great for scanning the local subnet but does not work over routed networks with different IP address ranges.
+This is why this tool uses IP address ranges to scan the network.
+
