@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "onvif": "^0.6.0",
+    "request": "^2.87.0",
     "require": "^2.4.20"
   },
   "keywords": [

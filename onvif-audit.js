@@ -156,17 +156,33 @@ function perform_audit(ip_address, port, username, password) {
                         cam_obj.getSnapshotUri({}, function (err, result, xml) {
                             if (!err) got_snapshot = result;
 
+                            
                             var http = require('http');
                             var fs = require('fs');
-                            var filename = 'snapshot' + ip_entry + '.jpg';
-                            var url = got_snapshot.uri;
-                            var file = fs.createWriteStream(filename);
-                            file.on('finish', function() {
-                                file.close(cb);
+                            const url = require('url');
+                            const request = require('request');
+
+                            var filename = 'snapshot_' + ip_entry + '.jpg';
+                            var uri = url.parse(got_snapshot.uri);
+                            uri.username = username;
+                            uri.password = password;
+                            var filestream = fs.createWriteStream(filename);
+                            /*
+                            filestream.on('finish', function() {
+                                filestream.close();
                               });
-                            var request = http.get(url, function(response) {
-                                response.pipe(file);
+                            var request = http.get(uri, function(response) {
+                                response.pipe(filestream);
                             });
+                            */
+
+
+
+                            request(got_snapshot.uri,  {'auth': {
+                                'user': username,
+                                'pass': password,
+                                'sendImmediately': false
+                              }}).pipe(filestream);
 
                             callback();
                         });
