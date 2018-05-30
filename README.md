@@ -56,3 +56,7 @@ cameralist.json contains this....
 ONVIF supports Discovery via WS-Discover protocol. This is great for scanning the local subnet but does not work over routed networks with different IP address ranges.
 This is why this tool uses IP address ranges to scan the network.
 
+
+# Coming Soon
+Use the ONVIF Absolute PTZ Position Command to take a snapshot looking in different directions
+
