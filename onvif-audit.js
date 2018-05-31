@@ -253,7 +253,6 @@ function perform_audit(ip_address, port, username, password, folder) {
                         });
                     } catch (err) { callback(); }
                 },
-                /*
                 function (callback) {
                     try {
                         cam_obj.getStreamUri({
@@ -276,6 +275,8 @@ function perform_audit(ip_address, port, username, password, folder) {
                         });
                     } catch (err) { callback(); }
                 },
+                /* Multicast is optional in Profile S, Mandatory in Profile T
+                but could be disabled
                 function (callback) {
                     try {
                         cam_obj.getStreamUri({
@@ -340,6 +341,12 @@ function perform_audit(ip_address, port, username, password, folder) {
                             msg += 'Firmware Version:= unknown\r\n';
                             msg += 'Serial Number:= unknown\r\n';
                             msg += 'Hardware ID:= unknown\r\n';
+                        }
+                        if (got_live_stream_tcp) {
+                            msg += 'First Live TCP Stream: =       ' + got_live_stream_tcp.uri + '\r\n';
+                        }
+                        if (got_live_stream_udp) {
+                            msg += 'First Live UDP Stream: =       ' + got_live_stream_udp.uri + '\r\n';
                         }
                         fs.write(log_fd, msg, function (err) {
                             if (err)
