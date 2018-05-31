@@ -49,7 +49,7 @@ var folder = 'onvif_audit_report_' + time_now.format('Y_m_d_H_M_S');
 
 try {
     fs.mkdirSync(folder);
-} catch(e) {
+} catch (e) {
 }
 
 
@@ -166,7 +166,7 @@ function perform_audit(ip_address, port, username, password, folder) {
                         cam_obj.getSnapshotUri({}, function (err, result, xml) {
                             if (!err) got_snapshot = result;
 
-                            
+
                             var http = require('http');
                             var fs = require('fs');
                             const url = require('url');
@@ -174,10 +174,20 @@ function perform_audit(ip_address, port, username, password, folder) {
 
                             var filename = folder + path.sep + 'snapshot_' + ip_entry + '.jpg';
                             var uri = url.parse(got_snapshot.uri);
+
+                            // handle the case where the camera is behind NAT
+                            // ONVIF Standard now says use XAddr for camera
+                            // and ignore the IP address in the Snapshot URI
+                            uri.host = ip_entry;
                             uri.username = username;
                             uri.password = password;
+                            if (!uri.port) uri.port = 80;
+                            var modified_uri = uri.href;
+
                             var filestream = fs.createWriteStream(filename);
-                            /*
+
+
+                            /* ERROR 1 - Node HTTP client does not support Digest Auth
                             filestream.on('finish', function() {
                                 filestream.close();
                               });
@@ -186,13 +196,56 @@ function perform_audit(ip_address, port, username, password, folder) {
                             });
                             */
 
+                            var digestRequest = require('request-digest')(username, password);
+                            digestRequest.request({
+                                host: 'http://' + uri.host,
+                                path: uri.path,
+                                port: uri.port,
+                                encoding: null, // return data as a Buffer()
+                                method: 'GET'
+                                //                             headers: {
+                                //                               'Custom-Header': 'OneValue',
+                                //                               'Other-Custom-Header': 'OtherValue'
+                                //                             }
+                            }, function (error, response, body) {
+                                if (error) {
+                                    throw error;
+                                }
+
+                                console.log(body);
+                                var snapshot_fd;
+
+                                fs.open(filename, 'w', function (err, fd) {
+                                    // callback for file opened, or file open error
+                                    if (err) {
+                                        console.log('ERROR - cannot create output file ' + log_filename);
+                                        console.log(err);
+                                        console.log('');
+                                        process.exit(1);
+                                    }
+                                    snapshot_fd = fd;
+                                    fs.appendFile(filename, body, function (err) {
+                                        if (err) {
+                                            console.log('Error writing to file');
+                                        }
+                                    });
 
 
-                            request(got_snapshot.uri,  {'auth': {
+                                    //fs.write(snapshot_fd, body, function (err) {
+                                    //    if (err)
+                                    //        console.log('Error writing to file');
+                                    //});
+                                    ////fs.closeSync(snapshot_fd);
+                                });
+                            });
+
+                            /* ERROR 2 - This library did not work with ONVIF cameras
+                            request(modified_uri,  {'auth': {
                                 'user': username,
                                 'pass': password,
                                 'sendImmediately': false
                               }}).pipe(filestream);
+                            */
 
                             callback();
                         });
@@ -253,20 +306,20 @@ function perform_audit(ip_address, port, username, password, folder) {
                     }
                     console.log('------------------------------');
 
-                    var log_filename = folder + path.sep + 'camera_report_' + ip_entry  + '.txt';
+                    var log_filename = folder + path.sep + 'camera_report_' + ip_entry + '.txt';
                     var log_fd;
-                
-                    fs.open(log_filename,'w',function(err,fd) {
+
+                    fs.open(log_filename, 'w', function (err, fd) {
                         if (err) {
-                          console.log('ERROR - cannot create output file ' + log_filename);
-                          console.log(err);
-                          console.log('');
-                          process.exit(1);
+                            console.log('ERROR - cannot create output file ' + log_filename);
+                            console.log(err);
+                            console.log('');
+                            process.exit(1);
                         }
                         log_fd = fd;
-                        console.log('Log File Open ('+log_filename+')');
+                        console.log('Log File Open (' + log_filename + ')');
 
-                        // write to log file
+                        // write to log file in the Open callback
                         let msg = 'Host:= ' + ip_entry + ' Port:= ' + port + '\r\n';
                         if (got_date) {
                             msg += 'Date:= ' + got_date + '\r\n';
@@ -286,14 +339,14 @@ function perform_audit(ip_address, port, username, password, folder) {
                             msg += 'Serial Number:= unknown\r\n';
                             msg += 'Hardware ID:= unknown\r\n';
                         }
-                        fs.write(log_fd,msg,function(err) {
-                        if (err)
-                            console.log('Error writing to file');
+                        fs.write(log_fd, msg, function (err) {
+                            if (err)
+                                console.log('Error writing to file');
                         });
 
-                      });
-                
-                
+                    });
+
+
 
 
                     callback();

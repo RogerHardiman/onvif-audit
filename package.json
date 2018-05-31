@@ -21,6 +21,7 @@
     "onvif": "^0.6.0",
     "path": "^0.12.7",
     "request": "^2.87.0",
+    "request-digest": "^1.0.10",
     "require": "^2.4.20"
   },
   "keywords": [
