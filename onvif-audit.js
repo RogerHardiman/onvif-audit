@@ -67,7 +67,8 @@ if (args.ipaddress) {
 
 if (args.filename) {
     // Connection details supplied in a .JSON file
-    var file = require(args.filename);
+    var contents = fs.readFileSync(args.filename);
+    var file = JSON.parse(contents);
 
     if (file.cameralist && file.cameralist.length > 0) {
         // process each item in the camera list

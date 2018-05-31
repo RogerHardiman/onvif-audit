@@ -1,6 +1,6 @@
 {
   "name": "onvif-site-audit",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "author": "Roger Hardiman <contact@rjh.org.uk>",
   "description": "ONVIF Camera Audit Tool",
   "main": "/audit.js",
