@@ -209,34 +209,36 @@ function perform_audit(ip_address, port, username, password, folder) {
                                 //                             }
                             }, function (error, response, body) {
                                 if (error) {
-                                    throw error;
-                                }
+                                    console.log('Error downloading snapshot');
+                                //    throw error;
+                                } else {
 
-                                console.log(body);
-                                var snapshot_fd;
+                                    console.log(body);
+                                    var snapshot_fd;
 
-                                fs.open(filename, 'w', function (err, fd) {
-                                    // callback for file opened, or file open error
-                                    if (err) {
-                                        console.log('ERROR - cannot create output file ' + log_filename);
-                                        console.log(err);
-                                        console.log('');
-                                        process.exit(1);
-                                    }
-                                    snapshot_fd = fd;
-                                    fs.appendFile(filename, body, function (err) {
+                                    fs.open(filename, 'w', function (err, fd) {
+                                        // callback for file opened, or file open error
                                         if (err) {
-                                            console.log('Error writing to file');
+                                            console.log('ERROR - cannot create output file ' + log_filename);
+                                            console.log(err);
+                                            console.log('');
+                                            process.exit(1);
                                         }
+                                        snapshot_fd = fd;
+                                        fs.appendFile(filename, body, function (err) {
+                                            if (err) {
+                                                console.log('Error writing to file');
+                                            }
+                                        });
+
+
+                                        //fs.write(snapshot_fd, body, function (err) {
+                                        //    if (err)
+                                        //        console.log('Error writing to file');
+                                        //});
+                                        ////fs.closeSync(snapshot_fd);
                                     });
-
-
-                                    //fs.write(snapshot_fd, body, function (err) {
-                                    //    if (err)
-                                    //        console.log('Error writing to file');
-                                    //});
-                                    ////fs.closeSync(snapshot_fd);
-                                });
+                                }
                             });
 
                             /* ERROR 2 - This library did not work with ONVIF cameras
