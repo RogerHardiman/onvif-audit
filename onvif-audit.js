@@ -177,7 +177,12 @@ function perform_audit(ip_addresses, port, username, password, folder) {
     // try each IP address and each Port
     ip_list.forEach(function (ip_entry) {
 
-        // console.log(ip_entry + ':' + port);
+        // workaround the ONVIF Library API
+        // Cam() with a username and password tries to connect (and genertes a callback error)
+        // and then it tries to call some SOAP methods which fails (and it generates a callback error)
+        let shown_error = false;
+
+        console.log("Connecting to " + ip_entry + ':' + port);
 
         new Cam({
             hostname: ip_entry,
@@ -187,7 +192,15 @@ function perform_audit(ip_addresses, port, username, password, folder) {
             timeout: 5000
         }, function CamFunc(err) {
             if (err) {
-                console.log("Cannot connect to " + err);
+                if (shown_error == false) {
+                    console.log('------------------------------');
+                    console.log("Cannot connect to " + ip_entry + ":" + port);
+                    // cut the error at \n
+                    if (err.message) console.log(err.message);
+                    else console.log(err);
+                    console.log('------------------------------');
+                    shown_error = true;
+                }
                 return;
             }
 
