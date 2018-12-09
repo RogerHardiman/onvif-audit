@@ -51,8 +51,8 @@ if (!args.filename && !args.ipaddress && !args.scan) {
     process.exit(1);
 }
 
-var time_now = dateTime.create();
-var folder = 'onvif_audit_report_' + time_now.format('Y_m_d_H_M_S');
+let time_now = dateTime.create();
+let folder = 'onvif_audit_report_' + time_now.format('Y_m_d_H_M_S');
 
 try {
     fs.mkdirSync(folder);
@@ -74,8 +74,8 @@ if (args.ipaddress) {
 
 if (args.filename) {
     // Connection details supplied in a .JSON file
-    var contents = fs.readFileSync(args.filename);
-    var file = JSON.parse(contents);
+    let contents = fs.readFileSync(args.filename);
+    let file = JSON.parse(contents);
 
     if (file.cameralist && file.cameralist.length > 0) {
         // process each item in the camera list
@@ -104,19 +104,19 @@ if (args.scan) {
             },
             function (err, result) {
                 if (err) return;
-                var xaddrs = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['XAddrs'][0];
-                var scopes = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['Scopes'][0];
+                let xaddrs = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['XAddrs'][0];
+                let scopes = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['Scopes'][0];
                 scopes = scopes.split(" ");
 
-                var hardare = "";
-                var name = "";
-                for (var i = 0; i < scopes.length; i++) {
+                let hardare = "";
+                let name = "";
+                for (let i = 0; i < scopes.length; i++) {
                     // use decodeUri to conver %20 to ' '
                     if (scopes[i].includes('onvif://www.onvif.org/name')) name = decodeURI(scopes[i].substring(27));
                     if (scopes[i].includes('onvif://www.onvif.org/hardware')) hardware = decodeURI(scopes[i].substring(31));
                 }
                 // split scopes on Space
-                var msg = 'Discovery Reply from ' + rinfo.address + ' (' + name + ') (' + hardware + ')';
+                let msg = 'Discovery Reply from ' + rinfo.address + ' (' + name + ') (' + hardware + ')';
                 //console.log('%j',result);
                 console.log(msg);
             }
@@ -133,31 +133,43 @@ if (args.scan) {
 // program ends here (just functions below)
 
 
-function perform_audit(ip_address, port, username, password, folder) {
+function perform_audit(ip_addresses, port, username, password, folder) {
 
-    var ip_start;
-    var ip_end;
+    let ip_list = [];
 
-    if (ip_address.includes('-')) {
-        // split on the '-'
-        var split_str = ip_address.split('-');
-        if (split_str.length != 2) {
-            console.log('IP address format incorrect. Should by x.x.x.x-y.y.y.y');
-            process.exit(1);
+    // Valid IP addresses are
+    // a) Single address 1.2.3.4
+    // b) Range 10.10.10.50-10.10.10.99
+    // c) List 1.1.1.1,2.2.2.2,3.3.3.3
+    // d) Mixture 1.2.3.4,10.10.10.50-10.10.10.99
+
+    ip_addresses = ip_addresses.split(',');
+    for (let i = 0; i < ip_addresses.length; i++) {
+        let item = ip_addresses[i];
+        if (item.includes('-')) {
+            // item contains '-'. Split on the '-'
+            let split_str = item.split('-');
+            if (split_str.length != 2) {
+                console.log('IP address format incorrect. Should by x.x.x.x-y.y.y.y');
+                process.exit(1);
+            }
+            let ip_start = split_str[0];
+            let ip_end = split_str[1];
+
+            let tmp_list = generate_range(ip_start, ip_end);
+
+            // Copy
+            for (let x = 0; x < tmp_list.length; x++) ip_list.push(tmp_list[x]);
         }
-        ip_start = split_str[0];
-        ip_end = split_str[1];
-    }
-    else {
-        // does not include a '-' symbol
-        ip_start = ip_address;
-        ip_end = ip_address;
+        else {
+            // item does not include a '-' symbol
+            ip_list.push(item);
+        }
     }
 
 
-    console.log('Scanning IP addresses from ' + ip_start + ' to ' + ip_end);
+    // console.log('Scanning ' + ip_list.length + ' addresses from ' + ip_list[0] + ' to ' + ip_list[ip_list.length-1]);
 
-    var ip_list = generate_range(ip_start, ip_end);
 
     // hide error messages
     console.error = function () { };
@@ -165,7 +177,7 @@ function perform_audit(ip_address, port, username, password, folder) {
     // try each IP address and each Port
     ip_list.forEach(function (ip_entry) {
 
-        console.log(ip_entry + ':' + port);
+        // console.log(ip_entry + ':' + port);
 
         new Cam({
             hostname: ip_entry,
@@ -179,15 +191,15 @@ function perform_audit(ip_address, port, username, password, folder) {
                 return;
             }
 
-            var cam_obj = this;
+            let cam_obj = this;
 
-            var got_date;
-            var got_info;
-            var got_snapshots = [];
-            var got_live_stream_tcp;
-            var got_live_stream_udp;
-            var got_live_stream_multicast;
-            var got_recordings;
+            let got_date;
+            let got_info;
+            let got_snapshots = [];
+            let got_live_stream_tcp;
+            let got_live_stream_udp;
+            let got_live_stream_multicast;
+            let got_recordings;
 
             // Use Nimble to execute each ONVIF function in turn
             // This is used so we can wait on all ONVIF replies before
@@ -212,26 +224,27 @@ function perform_audit(ip_address, port, username, password, folder) {
                         // Grab a JPEG from each VideoSource
                         // Note. The Nimble Callback is only called once we have ONVIF replies
                         // have been returned
-                        var reply_max = cam_obj.activeSources.length;
-                        var reply_count = 0;
-                        for (var src_idx = 0; src_idx < cam_obj.activeSources.length; src_idx++) {
-                            var videoSource = cam_obj.activeSources[src_idx];
+                        let reply_max = cam_obj.activeSources.length;
+                        let reply_count = 0;
+                        for (let src_idx = 0; src_idx < cam_obj.activeSources.length; src_idx++) {
+                            let videoSource = cam_obj.activeSources[src_idx];
                             cam_obj.getSnapshotUri({profileToken: videoSource.profileToken},function (err, getUri_result, xml) {
                                 reply_count++;
                                 if (!err) got_snapshots.push(getUri_result);
 
-                                var http = require('http');
-                                var fs = require('fs');
+                                const http = require('http');
+                                const fs = require('fs');
                                 const url = require('url');
                                 const request = require('request');
 
+                                let filename = "";
                                 if (cam_obj.activeSources.length === 1) {
-                                    var filename = folder + path.sep + 'snapshot_' + ip_entry + '.jpg';
+                                    filename = folder + path.sep + 'snapshot_' + ip_entry + '.jpg';
                                 } else {
                                     // add _1, _2, _3 etc for cameras with multiple VideoSources
-                                    var filename = folder + path.sep + 'snapshot_' + ip_entry + '_' + (src_idx+1) + '.jpg';
+                                    filename = folder + path.sep + 'snapshot_' + ip_entry + '_' + (src_idx+1) + '.jpg';
                                 }
-                                var uri = url.parse(getUri_result.uri);
+                                let uri = url.parse(getUri_result.uri);
 
                                 // handle the case where the camera is behind NAT
                                 // ONVIF Standard now says use XAddr for camera
@@ -240,21 +253,21 @@ function perform_audit(ip_address, port, username, password, folder) {
                                 uri.username = username;
                                 uri.password = password;
                                 if (!uri.port) uri.port = 80;
-                                var modified_uri = uri.href;
+                                let modified_uri = uri.href;
 
-                                var filestream = fs.createWriteStream(filename);
+                                let filestream = fs.createWriteStream(filename);
 
 
                                 /* ERROR 1 - Node HTTP client does not support Digest Auth
                                 filestream.on('finish', function() {
                                     filestream.close();
                                 });
-                                var request = http.get(uri, function(response) {
+                                let request = http.get(uri, function(response) {
                                     response.pipe(filestream);
                                 });
                                 */
 
-                                var digestRequest = require('request-digest')(username, password);
+                                let digestRequest = require('request-digest')(username, password);
                                 digestRequest.request({
                                     host: 'http://' + uri.host,
                                     path: uri.path,
@@ -267,11 +280,11 @@ function perform_audit(ip_address, port, username, password, folder) {
                                     //                             }
                                 }, function (error, response, body) {
                                     if (error) {
-                                        console.log('Error downloading snapshot');
-                                    //    throw error;
+                                        // console.log('Error downloading snapshot');
+                                        // throw error;
                                     } else {
 
-                                        var snapshot_fd;
+                                        let snapshot_fd;
 
                                         fs.open(filename, 'w', function (err, fd) {
                                             // callback for file opened, or file open error
@@ -353,7 +366,7 @@ function perform_audit(ip_address, port, username, password, folder) {
                     console.log('Date: = ' + got_date);
                     console.log('Info: = ' + JSON.stringify(got_info));
                     if (got_snapshots.length>0) {
-                        for (var i = 0; i < got_snapshots.length; i++) {
+                        for (let i = 0; i < got_snapshots.length; i++) {
                             console.log('Snapshot URI: =                ' + got_snapshots[i].uri);
                         }
                     }
@@ -368,8 +381,8 @@ function perform_audit(ip_address, port, username, password, folder) {
                     }
                     console.log('------------------------------');
 
-                    var log_filename = folder + path.sep + 'camera_report_' + ip_entry + '.txt';
-                    var log_fd;
+                    let log_filename = folder + path.sep + 'camera_report_' + ip_entry + '.txt';
+                    let log_fd;
 
                     fs.open(log_filename, 'w', function (err, fd) {
                         if (err) {
@@ -427,16 +440,16 @@ function perform_audit(ip_address, port, username, password, folder) {
 }
 
 function generate_range(start_ip, end_ip) {
-    var start_long = toLong(start_ip);
-    var end_long = toLong(end_ip);
+    let start_long = toLong(start_ip);
+    let end_long = toLong(end_ip);
     if (start_long > end_long) {
-        var tmp = start_long;
+        let tmp = start_long;
         start_long = end_long
         end_long = tmp;
     }
-    var range_array = [];
-    var i;
-    for (i = start_long; i <= end_long; i++) {
+    let range_array = [];
+    let i;
+    for (let i = start_long; i <= end_long; i++) {
         range_array.push(fromLong(i));
     }
     return range_array;
@@ -444,7 +457,7 @@ function generate_range(start_ip, end_ip) {
 
 //toLong taken from NPM package 'ip' 
 function toLong(ip) {
-    var ipl = 0;
+    let ipl = 0;
     ip.split('.').forEach(function (octet) {
         ipl <<= 8;
         ipl += parseInt(octet);
