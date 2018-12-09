@@ -21,7 +21,7 @@
     "onvif": "git://github.com/agsh/onvif.git#a811653",
     "path": "^0.12.7",
     "request": "^2.87.0",
-    "request-digest": "^1.0.10",
+    "request-digest": "^1.0.13",
     "require": "^2.4.20"
   },
   "keywords": [
