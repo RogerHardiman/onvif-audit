@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "node-datetime": "^2.0.6",
-    "onvif": "git://github.com/agsh/onvif.git#a811653",
+    "onvif": "git://github.com/agsh/onvif.git#cc4e57f",
     "path": "^0.12.7",
     "request": "^2.87.0",
     "request-digest": "^1.0.13",
