@@ -2,7 +2,7 @@
 
 onvif-audit will scan a network looking for ONVIF cameras and create an audit log folder containing
 
-* Text File which reports the Camera Make and Model and the Camera Time (to check Time Sync Errors)
+* Text File which reports the Camera Make and Model and Serial Number and the Camera Time (to check Time Sync Errors)
 * JPEG Snapshot of the camera view
 
 The Audit can be controlled from the Command Line or via a Configuration File
@@ -57,8 +57,9 @@ ONVIF supports Discovery via WS-Discover protocol. This is great for scanning th
 This is why this tool uses IP address ranges to scan the network.
 
 # Binary Executble Version
-The npm package called 'pkg' is used to compile the Javascript into a standalone executable for Windows, Mac and Linux
+The npm package called 'pkg' is used to compile the Javascript into a standalone executable for Windows, Mac and Linux. Run ```./node_modules/pkg/lib-es5/bin.js onvif-audit.js```
 
-# Coming Soon
-Use the ONVIF Absolute PTZ Position Command to take a snapshot looking in different directions
+# Future Plans
+a) Use the ONVIF Absolute PTZ Position Command to take a snapshot looking in different directions
+b) For devices with multiple VideoSource inputs (eg Panoramic cameras or IP Encoders with multiple inputs), take a JPEG snapshot from each camera
 
