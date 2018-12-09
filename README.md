@@ -43,7 +43,7 @@ cameralist.json contains this....
 		},
 		{
 			"ipaddress": "11.22.33.44",
-			"port": "81",
+			"port": "80",
 			"username": "admin",
 			"password": "password",
 			"comment": "HikVision"
@@ -53,13 +53,13 @@ cameralist.json contains this....
 ```
 
 # ONVIF Discovery vrs IP address range scan
-ONVIF supports Discovery via WS-Discover protocol. This is great for scanning the local subnet but does not work over routed networks with different IP address ranges.
-This is why this tool uses IP address ranges to scan the network.
+ONVIF Audit supports Discovery of devices on the local network with the --scan option.
+This is great for scanning the local subnet but does not work over routed networks with different IP address ranges.
+This is why this tool also uses IP address ranges to scan the network.
 
 # Binary Executble Version
 The npm package called 'pkg' is used to compile the Javascript into a standalone executable for Windows, Mac and Linux. Run ```./node_modules/pkg/lib-es5/bin.js onvif-audit.js```
 
 # Future Plans
 a) Use the ONVIF Absolute PTZ Position Command to take a snapshot looking in different directions
-b) For devices with multiple VideoSource inputs (eg Panoramic cameras or IP Encoders with multiple inputs), take a JPEG snapshot from each camera
 
