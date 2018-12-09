@@ -1,11 +1,12 @@
 /**
- * (c) Roger Hardiman <opensource@rjh.org.uk>
- * May 2018
+ * (C) Roger Hardiman <opensource@rjh.org.uk>
+ * First Release - May 2018
  * Licenced with the MIT Licence
  *
  * Perform a brute force scan of the network looking for ONVIF devices
  * For each device, save the make and model and a snapshot in the audit folder
  *
+ * Can also use ONVIF Discovery to trigger the scan
  */
 
 var IPADDRESS = '192.168.1.1-192.168.1.254', // single address or a range
@@ -13,13 +14,17 @@ var IPADDRESS = '192.168.1.1-192.168.1.254', // single address or a range
     USERNAME = 'onvifusername',
     PASSWORD = 'onvifpassword';
 
-var Cam = require('onvif').Cam;
+var onvif = require('onvif');
+var Cam = onvif.Cam;
 var flow = require('nimble');
 var http = require('http');
 var args = require('commander');
 var fs = require('fs');
 var dateTime = require('node-datetime');
 var path = require('path');
+var parseString = require('xml2js').parseString;
+var stripPrefix = require('xml2js').processors.stripPrefix;
+
 
 
 // Show Version
@@ -31,6 +36,7 @@ args.option('-i, --ipaddress <value>', 'IP Address (x.x.x.x) or IP Address Range
 args.option('-P, --port <value>', 'ONVIF Port. Default 80', parseInt, 80);
 args.option('-u, --username <value>', 'ONVIF Username');
 args.option('-p, --password <value>', 'ONVIF Password');
+args.option('-s, --scan', 'Discover Network devices on local subnet');
 args.parse(process.argv);
 
 if (!args) {
@@ -39,8 +45,9 @@ if (!args) {
 
 }
 
-if (!args.filename && !args.ipaddress) {
-    console.log('Requires either a Filename or an IP Address/IP Range');
+if (!args.filename && !args.ipaddress && !args.scan) {
+    console.log('Requires either a Filename (-f) or an IP Address/IP Range (-i) or a Scan (-s)');
+    console.log('Use -h for details');
     process.exit(1);
 }
 
@@ -86,8 +93,44 @@ if (args.filename) {
     }
 }
 
+if (args.scan) {
+    // set up an event handler which is called for each device discovered
+    onvif.Discovery.on('device', function(cam,rinfo,xml){
+        // function will be called as soon as NVT responses
+
+        parseString(xml, 
+            {
+                tagNameProcessors: [ stripPrefix ]   // strip namespace eg tt:Data -> Data
+            },
+            function (err, result) {
+                if (err) return;
+                var xaddrs = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['XAddrs'][0];
+                var scopes = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['Scopes'][0];
+                scopes = scopes.split(" ");
+
+                var hardare = "";
+                var name = "";
+                for (var i = 0; i < scopes.length; i++) {
+                    // use decodeUri to conver %20 to ' '
+                    if (scopes[i].includes('onvif://www.onvif.org/name')) name = decodeURI(scopes[i].substring(27));
+                    if (scopes[i].includes('onvif://www.onvif.org/hardware')) hardware = decodeURI(scopes[i].substring(31));
+                }
+                // split scopes on Space
+                var msg = 'Discovery Reply from ' + rinfo.address + ' (' + name + ') (' + hardware + ')';
+                //console.log('%j',result);
+                console.log(msg);
+            }
+        );
+
+    })
+
+    // start the probe
+    // resolve=false  means Do not create Cam objects
+    onvif.Discovery.probe({resolve: false});
+}
 
 
+// program ends here (just functions below)
 
 
 function perform_audit(ip_address, port, username, password, folder) {
@@ -228,7 +271,6 @@ function perform_audit(ip_address, port, username, password, folder) {
                                     //    throw error;
                                     } else {
 
-                                        console.log(body);
                                         var snapshot_fd;
 
                                         fs.open(filename, 'w', function (err, fd) {
@@ -337,7 +379,7 @@ function perform_audit(ip_address, port, username, password, folder) {
                             process.exit(1);
                         }
                         log_fd = fd;
-                        console.log('Log File Open (' + log_filename + ')');
+                        //console.log('Log File Open (' + log_filename + ')');
 
                         // write to log file in the Open callback
                         let msg = 'Host:= ' + ip_entry + ' Port:= ' + port + '\r\n';
