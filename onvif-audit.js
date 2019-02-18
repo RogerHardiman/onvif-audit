@@ -10,7 +10,7 @@
  */
 
 var IPADDRESS = '192.168.1.1-192.168.1.254', // single address or a range
-    PORT = 80,
+    PORT = '80',
     USERNAME = 'onvifusername',
     PASSWORD = 'onvifpassword';
 
@@ -33,7 +33,7 @@ args.version(version);
 args.description('ONVIF Camera Audit');
 args.option('-f, --filename <value>', 'Filename of JSON file with IP Address List');
 args.option('-i, --ipaddress <value>', 'IP Address (x.x.x.x) or IP Address Range (x.x.x.x-y.y.y.y)');
-args.option('-P, --port <value>', 'ONVIF Port. Default 80', parseInt, 80);
+args.option('-P, --port <value>', 'ONVIF Port. Default 80');
 args.option('-u, --username <value>', 'ONVIF Username');
 args.option('-p, --password <value>', 'ONVIF Password');
 args.option('-s, --scan', 'Discover Network devices on local subnet');
@@ -116,7 +116,7 @@ if (args.scan) {
                     if (scopes[i].includes('onvif://www.onvif.org/hardware')) hardware = decodeURI(scopes[i].substring(31));
                 }
                 // split scopes on Space
-                let msg = 'Discovery Reply from ' + rinfo.address + ' (' + name + ') (' + hardware + ')';
+                let msg = 'Discovery Reply from ' + rinfo.address + ' (' + name + ') (' + hardware + ') (' + xaddrs + ')';
                 //console.log('%j',result);
                 console.log(msg);
             }
@@ -211,6 +211,7 @@ function perform_audit(ip_addresses, port, username, password, folder) {
             let got_snapshots = [];
             let got_live_stream_tcp;
             let got_live_stream_udp;
+            let got_live_stream_http;
             let got_live_stream_multicast;
             let got_recordings;
 
@@ -243,86 +244,90 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                             let videoSource = cam_obj.activeSources[src_idx];
                             cam_obj.getSnapshotUri({profileToken: videoSource.profileToken},function (err, getUri_result, xml) {
                                 reply_count++;
-                                if (!err) got_snapshots.push(getUri_result);
 
-                                const http = require('http');
-                                const fs = require('fs');
-                                const url = require('url');
-                                const request = require('request');
+                                if (!err && getUri_result) {
 
-                                let filename = "";
-                                if (cam_obj.activeSources.length === 1) {
-                                    filename = folder + path.sep + 'snapshot_' + ip_entry + '.jpg';
-                                } else {
-                                    // add _1, _2, _3 etc for cameras with multiple VideoSources
-                                    filename = folder + path.sep + 'snapshot_' + ip_entry + '_' + (src_idx+1) + '.jpg';
-                                }
-                                let uri = url.parse(getUri_result.uri);
+                                    got_snapshots.push(getUri_result);
 
-                                // handle the case where the camera is behind NAT
-                                // ONVIF Standard now says use XAddr for camera
-                                // and ignore the IP address in the Snapshot URI
-                                uri.host = ip_entry;
-                                uri.username = username;
-                                uri.password = password;
-                                if (!uri.port) uri.port = 80;
-                                let modified_uri = uri.href;
+                                    const http = require('http');
+                                    const fs = require('fs');
+                                    const url = require('url');
+                                    const request = require('request');
 
-                                let filestream = fs.createWriteStream(filename);
-
-
-                                /* ERROR 1 - Node HTTP client does not support Digest Auth
-                                filestream.on('finish', function() {
-                                    filestream.close();
-                                });
-                                let request = http.get(uri, function(response) {
-                                    response.pipe(filestream);
-                                });
-                                */
-
-                                let digestRequest = require('request-digest')(username, password);
-                                digestRequest.request({
-                                    host: 'http://' + uri.host,
-                                    path: uri.path,
-                                    port: uri.port,
-                                    encoding: null, // return data as a Buffer()
-                                    method: 'GET'
-                                    //                             headers: {
-                                    //                               'Custom-Header': 'OneValue',
-                                    //                               'Other-Custom-Header': 'OtherValue'
-                                    //                             }
-                                }, function (error, response, body) {
-                                    if (error) {
-                                        // console.log('Error downloading snapshot');
-                                        // throw error;
+                                    let filename = "";
+                                    if (cam_obj.activeSources.length === 1) {
+                                        filename = folder + path.sep + 'snapshot_' + ip_entry + '.jpg';
                                     } else {
-
-                                        let snapshot_fd;
-
-                                        fs.open(filename, 'w', function (err, fd) {
-                                            // callback for file opened, or file open error
-                                            if (err) {
-                                                console.log('ERROR - cannot create output file ' + log_filename);
-                                                console.log(err);
-                                                console.log('');
-                                                process.exit(1);
-                                            }
-                                            snapshot_fd = fd;
-                                            fs.appendFile(filename, body, function (err) {
-                                                if (err) {
-                                                    console.log('Error writing to file');
-                                                }
-                                            });
-
-
-                                            //fs.write(snapshot_fd, body, function (err) {
-                                            //    if (err)
-                                            //        console.log('Error writing to file');
-                                            //});
-                                            ////fs.closeSync(snapshot_fd);
-                                        });
+                                        // add _1, _2, _3 etc for cameras with multiple VideoSources
+                                        filename = folder + path.sep + 'snapshot_' + ip_entry + '_' + (src_idx+1) + '.jpg';
                                     }
-                                });
+                                    let uri = url.parse(getUri_result.uri);
+
+                                    // handle the case where the camera is behind NAT
+                                    // ONVIF Standard now says use XAddr for camera
+                                    // and ignore the IP address in the Snapshot URI
+                                    uri.host = ip_entry;
+                                    uri.username = username;
+                                    uri.password = password;
+                                    if (!uri.port) uri.port = 80;
+                                    let modified_uri = uri.href;
+
+                                    let filestream = fs.createWriteStream(filename);
+
+
+                                    /* ERROR 1 - Node HTTP client does not support Digest Auth
+                                    filestream.on('finish', function() {
+                                        filestream.close();
+                                    });
+                                    let request = http.get(uri, function(response) {
+                                        response.pipe(filestream);
+                                    });
+                                    */
+
+                                    let digestRequest = require('request-digest')(username, password);
+                                    digestRequest.request({
+                                        host: 'http://' + uri.host,
+                                        path: uri.path,
+                                        port: uri.port,
+                                        encoding: null, // return data as a Buffer()
+                                        method: 'GET'
+                                        //                             headers: {
+                                        //                               'Custom-Header': 'OneValue',
+                                        //                               'Other-Custom-Header': 'OtherValue'
+                                        //                             }
+                                    }, function (error, response, body) {
+                                        if (error) {
+                                            // console.log('Error downloading snapshot');
+                                            // throw error;
+                                        } else {
+
+                                            let snapshot_fd;
+
+                                            fs.open(filename, 'w', function (err, fd) {
+                                                // callback for file opened, or file open error
+                                                if (err) {
+                                                    console.log('ERROR - cannot create output file ' + log_filename);
+                                                    console.log(err);
+                                                    console.log('');
+                                                    process.exit(1);
+                                                }
+                                                snapshot_fd = fd;
+                                                fs.appendFile(filename, body, function (err) {
+                                                    if (err) {
+                                                        console.log('Error writing to file');
+                                                    }
+                                                });
+
+
+                                                //fs.write(snapshot_fd, body, function (err) {
+                                                //    if (err)
+                                                //        console.log('Error writing to file');
+                                                //});
+                                                ////fs.closeSync(snapshot_fd);
+                                            });
+                                        }
+                                    });
+                                }
 
                                 /* ERROR 2 - This library did not work with ONVIF cameras
                                 request(modified_uri,  {'auth': {
@@ -359,6 +364,17 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                         });
                     } catch (err) { nimble_callback(); }
                 },
+                function (nimble_callback) {
+                    try {
+                        cam_obj.getStreamUri({
+                            protocol: 'HTTP',
+                            stream: 'RTP-Unicast'
+                        }, function (err, stream, xml) {
+                            if (!err) got_live_stream_http = stream;
+                            nimble_callback();
+                        });
+                    } catch (err) { nimble_callback(); }
+                },
                 /* Multicast is optional in Profile S, Mandatory in Profile T
                 but could be disabled
                 function (nimble_callback) {
@@ -388,6 +404,9 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                     }
                     if (got_live_stream_udp) {
                         console.log('First Live UDP Stream: =       ' + got_live_stream_udp.uri);
+                    }
+                    if (got_live_stream_http) {
+                        console.log('First Live HTTP Stream: =      ' + got_live_stream_http.uri);
                     }
                     if (got_live_stream_multicast) {
                         console.log('First Live Multicast Stream: = ' + got_live_stream_multicast.uri);
