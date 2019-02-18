@@ -13,16 +13,31 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Program with Filename",
+            "name": "Launch Program with camera_list.json File",
             "program": "${workspaceFolder}/onvif-audit.js",
             "args": ["--filename","./camera_list.json"]
         },
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Program with IP Range",
+            "name": "Launch Program with Discovery",
             "program": "${workspaceFolder}/onvif-audit.js",
-            "args": ["--ipaddress","192.168.1.1-192.168.1.5","--username","onuser","--password","onpass"]
+            "args": ["--scan"]
+        },
+        {
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Program with 192.168.1.1",
+            "program": "${workspaceFolder}/onvif-audit.js",
+            "args": ["--ipaddress","192.168.1.1","--username","user","--password","pass"]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Program with Range 192.128.1.1 to .10",
+            "program": "${workspaceFolder}/onvif-audit.js",
+            "args": ["--ipaddress","192.168.1.1-192.168.1.10","--username","user","--password","pass"]
         }
     ]
 }
