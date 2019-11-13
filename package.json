@@ -17,12 +17,12 @@
     "url": "https://github.com/rogerhardiman/onvif-audit.git"
   },
   "dependencies": {
-    "node-datetime": "^2.0.6",
+    "commander": "^4.0.1",
+    "nimble": "0.0.2",
+    "node-datetime": "^2.1.2",
     "onvif": "git://github.com/agsh/onvif.git#cc4e57f",
-    "path": "^0.12.7",
-    "request": "^2.87.0",
     "request-digest": "^1.0.13",
-    "require": "^2.4.20"
+    "xml2js": "^0.4.22"
   },
   "keywords": [
     "onvif",
@@ -34,18 +34,5 @@
   "license": "MIT",
   "engines": {
     "node": ">=6.0"
-  },
-  "devDependencies": {
-    "coffeescript": "^1.9.3",
-    "coveralls": ">=2.11.2",
-    "dot": "^1.0.3",
-    "istanbul": ">=0.3.5",
-    "jscs": "^1.13.1",
-    "jsdoc": "^3.3.0",
-    "jshint": "^2.7.0",
-    "keypress": "^0.2.1",
-    "mocha": ">=2.1.0",
-    "mocha-lcov-reporter": "0.0.1",
-    "nimble": "^0.0.2"
   }
 }
