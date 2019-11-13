@@ -248,10 +248,8 @@ function perform_audit(ip_addresses, port, username, password, folder) {
 
                                     got_snapshots.push(getUri_result);
 
-                                    //const http = require('http');
                                     const fs = require('fs');
                                     const url = require('url');
-                                    //const request = require('request');
 
                                     let filename = "";
                                     if (cam_obj.activeSources.length === 1) {
