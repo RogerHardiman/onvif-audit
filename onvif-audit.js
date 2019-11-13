@@ -17,7 +17,6 @@ var IPADDRESS = '192.168.1.1-192.168.1.254', // single address or a range
 var onvif = require('onvif');
 var Cam = onvif.Cam;
 var flow = require('nimble');
-var http = require('http');
 var args = require('commander');
 var fs = require('fs');
 var dateTime = require('node-datetime');
@@ -57,6 +56,8 @@ let folder = 'onvif_audit_report_' + time_now.format('Y_m_d_H_M_S');
 try {
     fs.mkdirSync(folder);
 } catch (e) {
+    console.log('Unable to create log folder')
+    process.exit(1)
 }
 
 
@@ -108,7 +109,7 @@ if (args.scan) {
                 let scopes = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['Scopes'][0];
                 scopes = scopes.split(" ");
 
-                let hardare = "";
+                let hardware = "";
                 let name = "";
                 for (let i = 0; i < scopes.length; i++) {
                     // use decodeUri to conver %20 to ' '
@@ -213,20 +214,19 @@ function perform_audit(ip_addresses, port, username, password, folder) {
             let got_live_stream_udp;
             let got_live_stream_http;
             let got_live_stream_multicast;
-            let got_recordings;
 
             // Use Nimble to execute each ONVIF function in turn
             // This is used so we can wait on all ONVIF replies before
             // writing to the console
             flow.series([
                 function (nimble_callback) {
-                    cam_obj.getSystemDateAndTime(function (err, date, xml) {
+                    cam_obj.getSystemDateAndTime(function (err, date) {
                         if (!err) got_date = date;
                         nimble_callback();
                     });
                 },
                 function (nimble_callback) {
-                    cam_obj.getDeviceInformation(function (err, info, xml) {
+                    cam_obj.getDeviceInformation(function (err, info) {
                         if (!err) got_info = info;
                         nimble_callback();
                     });
@@ -236,23 +236,22 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                         // The ONVIF device may have multiple Video Sources
                         // eg 4 channel IP encoder or Panoramic Cameras
                         // Grab a JPEG from each VideoSource
-                        // Note. The Nimble Callback is only called once we have ONVIF replies
-                        // have been returned
+                        // Note. The Nimble Callback is only called once all ONVIF replies have been returned
                         let reply_max = cam_obj.activeSources.length;
                         let reply_count = 0;
                         for (let src_idx = 0; src_idx < cam_obj.activeSources.length; src_idx++) {
                             let videoSource = cam_obj.activeSources[src_idx];
-                            cam_obj.getSnapshotUri({profileToken: videoSource.profileToken},function (err, getUri_result, xml) {
+                            cam_obj.getSnapshotUri({profileToken: videoSource.profileToken},function (err, getUri_result) {
                                 reply_count++;
 
                                 if (!err && getUri_result) {
 
                                     got_snapshots.push(getUri_result);
 
-                                    const http = require('http');
+                                    //const http = require('http');
                                     const fs = require('fs');
                                     const url = require('url');
-                                    const request = require('request');
+                                    //const request = require('request');
 
                                     let filename = "";
                                     if (cam_obj.activeSources.length === 1) {
@@ -270,19 +269,6 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                                     uri.username = username;
                                     uri.password = password;
                                     if (!uri.port) uri.port = 80;
-                                    let modified_uri = uri.href;
-
-                                    let filestream = fs.createWriteStream(filename);
-
-
-                                    /* ERROR 1 - Node HTTP client does not support Digest Auth
-                                    filestream.on('finish', function() {
-                                        filestream.close();
-                                    });
-                                    let request = http.get(uri, function(response) {
-                                        response.pipe(filestream);
-                                    });
-                                    */
 
                                     let digestRequest = require('request-digest')(username, password);
                                     digestRequest.request({
@@ -301,45 +287,28 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                                             // throw error;
                                         } else {
 
-                                            let snapshot_fd;
-
-                                            fs.open(filename, 'w', function (err, fd) {
+                                            fs.open(filename, 'w', function (err) {
                                                 // callback for file opened, or file open error
                                                 if (err) {
-                                                    console.log('ERROR - cannot create output file ' + log_filename);
+                                                    console.log('ERROR - cannot create output log file');
                                                     console.log(err);
                                                     console.log('');
                                                     process.exit(1);
                                                 }
-                                                snapshot_fd = fd;
                                                 fs.appendFile(filename, body, function (err) {
                                                     if (err) {
                                                         console.log('Error writing to file');
                                                     }
                                                 });
 
-
-                                                //fs.write(snapshot_fd, body, function (err) {
-                                                //    if (err)
-                                                //        console.log('Error writing to file');
-                                                //});
-                                                ////fs.closeSync(snapshot_fd);
                                             });
                                         }
                                     });
                                 }
 
-                                /* ERROR 2 - This library did not work with ONVIF cameras
-                                request(modified_uri,  {'auth': {
-                                    'user': username,
-                                    'pass': password,
-                                    'sendImmediately': false
-                                }}).pipe(filestream);
-                                */
-
                                 if (reply_count === reply_max) nimble_callback(); // let 'flow' move on. JPEG GET is still async
                             });
-                        }; // end for
+                        } // end for
                     } catch (err) { nimble_callback(); }
                 },
                 function (nimble_callback) {
@@ -347,7 +316,7 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                         cam_obj.getStreamUri({
                             protocol: 'RTSP',
                             stream: 'RTP-Unicast'
-                        }, function (err, stream, xml) {
+                        }, function (err, stream) {
                             if (!err) got_live_stream_tcp = stream;
                             nimble_callback();
                         });
@@ -358,7 +327,7 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                         cam_obj.getStreamUri({
                             protocol: 'UDP',
                             stream: 'RTP-Unicast'
-                        }, function (err, stream, xml) {
+                        }, function (err, stream) {
                             if (!err) got_live_stream_udp = stream;
                             nimble_callback();
                         });
@@ -369,7 +338,7 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                         cam_obj.getStreamUri({
                             protocol: 'HTTP',
                             stream: 'RTP-Unicast'
-                        }, function (err, stream, xml) {
+                        }, function (err, stream) {
                             if (!err) got_live_stream_http = stream;
                             nimble_callback();
                         });
@@ -480,7 +449,6 @@ function generate_range(start_ip, end_ip) {
         end_long = tmp;
     }
     let range_array = [];
-    let i;
     for (let i = start_long; i <= end_long; i++) {
         range_array.push(fromLong(i));
     }
@@ -495,7 +463,7 @@ function toLong(ip) {
         ipl += parseInt(octet);
     });
     return (ipl >>> 0);
-};
+}
 
 //fromLong taken from NPM package 'ip' 
 function fromLong(ipl) {
@@ -503,5 +471,4 @@ function fromLong(ipl) {
         (ipl >> 16 & 255) + '.' +
         (ipl >> 8 & 255) + '.' +
         (ipl & 255));
-};
-
+}
