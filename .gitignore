@@ -59,3 +59,7 @@ typings/
 
 # next.js build output
 .next
+
+# Output from this application
+camera_report_*.txt
+snapshot_*.jpg
