@@ -21,7 +21,7 @@ var args = require('commander');
 var fs = require('fs');
 var dateTime = require('node-datetime');
 var path = require('path');
-var parseString = require('xml2js').parseString;
+var xml2js = require('xml2js')
 var stripPrefix = require('xml2js').processors.stripPrefix;
 
 
@@ -96,17 +96,29 @@ if (args.filename) {
 
 if (args.scan) {
     // set up an event handler which is called for each device discovered
-    onvif.Discovery.on('device', function(cam,rinfo,xml){
-        // function will be called as soon as NVT responses
+    onvif.Discovery.on('device', function (cam, rinfo, xml) {
+        // function will be called as soon as the NVT responses
 
-        parseString(xml, 
-            {
-                tagNameProcessors: [ stripPrefix ]   // strip namespace eg tt:Data -> Data
-            },
+        /* Filter out xml name spaces */
+        xml = xml.replace(/xmlns([^=]*?)=(".*?")/g, '');
+
+        let parser = new xml2js.Parser({
+            attrkey: 'attr',
+            charkey: 'payload',                // this ensures the payload is called .payload regardless of whether the XML Tags have Attributes or not
+            explicitCharkey: true,
+            tagNameProcessors: [stripPrefix]   // strip namespace eg tt:Data -> Data
+        });
+        parser.parseString(xml,
             function (err, result) {
                 if (err) return;
-                let xaddrs = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['XAddrs'][0];
-                let scopes = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['Scopes'][0];
+
+                // By default xml2js will return different json structures depending on whether there are 'attributes' in the XML
+                // For example <MyTag value="123">HELLO</MyTag> will return value=123 as the '$ field and HELLO as the '_' field
+                // For example <MyTag>HELLO</MyTag> does not use the '$' or '_' fields.
+                // To make things easier to handle, we use parser options to place the data we want in a 'payload' field
+
+                let xaddrs = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['XAddrs'][0].payload;
+                let scopes = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['Scopes'][0].payload;
                 scopes = scopes.split(" ");
 
                 let hardware = "";
@@ -127,7 +139,7 @@ if (args.scan) {
 
     // start the probe
     // resolve=false  means Do not create Cam objects
-    onvif.Discovery.probe({resolve: false});
+    onvif.Discovery.probe({ resolve: false });
 }
 
 
@@ -241,7 +253,7 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                         let reply_count = 0;
                         for (let src_idx = 0; src_idx < cam_obj.activeSources.length; src_idx++) {
                             let videoSource = cam_obj.activeSources[src_idx];
-                            cam_obj.getSnapshotUri({profileToken: videoSource.profileToken},function (err, getUri_result) {
+                            cam_obj.getSnapshotUri({ profileToken: videoSource.profileToken }, function (err, getUri_result) {
                                 reply_count++;
 
                                 if (!err && getUri_result) {
@@ -256,7 +268,7 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                                         filename = folder + path.sep + 'snapshot_' + ip_entry + '.jpg';
                                     } else {
                                         // add _1, _2, _3 etc for cameras with multiple VideoSources
-                                        filename = folder + path.sep + 'snapshot_' + ip_entry + '_' + (src_idx+1) + '.jpg';
+                                        filename = folder + path.sep + 'snapshot_' + ip_entry + '_' + (src_idx + 1) + '.jpg';
                                     }
                                     let uri = url.parse(getUri_result.uri);
 
@@ -361,7 +373,7 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                     console.log('Host: ' + ip_entry + ' Port: ' + port);
                     console.log('Date: = ' + got_date);
                     console.log('Info: = ' + JSON.stringify(got_info));
-                    if (got_snapshots.length>0) {
+                    if (got_snapshots.length > 0) {
                         for (let i = 0; i < got_snapshots.length; i++) {
                             console.log('Snapshot URI: =                ' + got_snapshots[i].uri);
                         }
