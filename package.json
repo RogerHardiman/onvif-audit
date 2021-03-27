@@ -1,6 +1,6 @@
 {
   "name": "onvif-site-audit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Roger Hardiman <contact@rjh.org.uk>",
   "description": "ONVIF Camera Audit Tool",
   "main": "/audit.js",
@@ -34,5 +34,8 @@
   "license": "MIT",
   "engines": {
     "node": ">=6.0"
+  },
+  "devDependencies": {
+    "eslint": "^7.23.0"
   }
 }
