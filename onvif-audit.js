@@ -117,6 +117,7 @@ if (args.scan) {
                 // For example <MyTag>HELLO</MyTag> does not use the '$' or '_' fields.
                 // To make things easier to handle, we use parser options to place the data we want in a 'payload' field
 
+                let urn = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['EndpointReference'][0]['Address'][0].payload;
                 let xaddrs = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['XAddrs'][0].payload;
                 let scopes = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['Scopes'][0].payload;
                 scopes = scopes.split(" ");
@@ -129,7 +130,7 @@ if (args.scan) {
                     if (scopes[i].includes('onvif://www.onvif.org/hardware')) hardware = decodeURI(scopes[i].substring(31));
                 }
                 // split scopes on Space
-                let msg = 'Discovery Reply from ' + rinfo.address + ' (' + name + ') (' + hardware + ') (' + xaddrs + ')';
+                let msg = 'Discovery Reply from ' + rinfo.address + ' (' + name + ') (' + hardware + ') (' + xaddrs + ') (' + urn + ')';
                 //console.log('%j',result);
                 console.log(msg);
             }
