@@ -137,6 +137,9 @@ if (args.scan) {
         );
 
     })
+    onvif.Discovery.on('error', function (err) {
+        // ignore discovery errors
+    })
 
     // start the probe
     // resolve=false  means Do not create Cam objects
