@@ -95,6 +95,10 @@ if (args.filename) {
 }
 
 if (args.scan) {
+    console.log("Probing for 5 seconds");
+
+    let scanResults = [];
+
     // set up an event handler which is called for each device discovered
     onvif.Discovery.on('device', function (cam, rinfo, xml) {
         // function will be called as soon as the NVT responses
@@ -129,10 +133,18 @@ if (args.scan) {
                     if (scopes[i].includes('onvif://www.onvif.org/name')) name = decodeURI(scopes[i].substring(27));
                     if (scopes[i].includes('onvif://www.onvif.org/hardware')) hardware = decodeURI(scopes[i].substring(31));
                 }
-                // split scopes on Space
-                let msg = 'Discovery Reply from ' + rinfo.address + ' (' + name + ') (' + hardware + ') (' + xaddrs + ') (' + urn + ')';
-                //console.log('%j',result);
-                console.log(msg);
+
+                process.stdout.write(".");
+
+                const newItem = {
+                    rinfo,
+                    name,
+                    hardware,
+                    xaddrs,
+                    urn,
+                    scopes
+                };
+		scanResults.push(newItem);
             }
         );
 
@@ -143,7 +155,44 @@ if (args.scan) {
 
     // start the probe
     // resolve=false  means Do not create Cam objects
-    onvif.Discovery.probe({ resolve: false });
+    onvif.Discovery.probe({ resolve: false }, function() {
+        // completion callback
+        process.stdout.write("\n");
+
+        // sort the Scan Results by IP Address
+        scanResults.sort((a,b) => { 
+            // Check we are matching IPv4 against IPv6. If so sort IPv4 first
+            if (a.rinfo.family < b.rinfo.family)
+                return -1;
+            else if (a.rinfo.family > b.rinfo.family)
+                return 1;
+            else {
+                // A and B are both the same "family" (IPv4 or IPv6)
+
+                if (a.rinfo.family == 'IPv4') {
+                    // IPv4 - sort numerically
+                    return toLong(a.rinfo.address) - toLong(b.rinfo.address);
+                }
+                else if (a.rinfo.family == 'IPv6') {
+                    // IPv6 - sort by String. Could be improved
+                    if (a.rinfo.address < b.rinfo.address) return -1;
+                    else if (a.rinfo.address > b.rinfo.address) return 1;
+                    else return 0;
+                }
+                else {
+                    // Unknown IP family
+                    return 0;
+                }
+            }
+        });
+
+        for(const item of scanResults) {
+            let msg = item.rinfo.address + ' (' + item.name + ') (' + item.hardware + ') (' + item.xaddrs + ') (' + item.urn + ')';
+            console.log(msg);
+        }
+        console.log("Total " + scanResults.length);
+    });
+
 }
 
 
