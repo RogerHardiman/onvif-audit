@@ -250,7 +250,7 @@ function perform_audit(ip_addresses, port, username, password, folder) {
 
         console.log("Connecting to " + ip_entry + ':' + port);
 
-        new Cam({
+        const c = new Cam({
             hostname: ip_entry,
             username: username,
             password: password,
@@ -274,11 +274,11 @@ function perform_audit(ip_addresses, port, username, password, folder) {
 
             let got_date;
             let got_info;
-            let got_snapshots = [];
-            let got_live_stream_tcp;
-            let got_live_stream_udp;
-            let got_live_stream_http;
-            let got_live_stream_multicast;
+            let got_videosources = [];
+            let got_profiles = [];
+            let bestProfile = []; // The preferred Profile indexed by Video Source.
+            let got_snapshots = []; // JPEG Imag URLs, indexed by Video Source
+            let got_livestreams = []; // RTSP URLs, indexed by Video Source
 
             // Use Nimble to execute each ONVIF function in turn
             // This is used so we can wait on all ONVIF replies before
@@ -298,26 +298,97 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                 },
                 function (nimble_callback) {
                     try {
+                        cam_obj.getVideoSources(function (err, videoSources) {
+                            if (!err) {
+                                got_videosources = videoSources;
+
+                                for (let i = 0; i < got_videosources.length; i++) {
+                                    // create empty placeholders
+                                    bestProfile.push({});
+                                    got_snapshots.push({videoSourceToken: null, uri: null});
+                                    got_livestreams.push({tcp: null, udp: null, http: null, multicast: null});
+                                }
+                            }
+                            nimble_callback();
+                        });
+                    } catch {
+                        nimble_callback();
+                    }
+                },
+                function (nimble_callback) {
+                    try {
+                        cam_obj.getProfiles(function (err, profiles) {
+                            if (!err) got_profiles = profiles;
+                            nimble_callback();
+                        });
+                    } catch {
+                        nimble_callback();
+                    }
+                },
+                function (nimble_callback) {
+                    // Compare VideoSources with Profiles.
+                    // Get the 'best' ONVIF Profile Token for each Video Source
+                    for (let src_idx = 0; src_idx < got_videosources.length; src_idx++) {
+                        const videoSource = got_videosources[src_idx];
+
+                        // Get the 'best' profile for this videoSource token
+                        // For most cameras we just find the first Profile which has the Video Source Token
+                        // but Hanwha emit the JPEG Profile first, then H264, then H265. So we have to find the 'best' Profile ourselves.
+                        // The Best one is the first H265, otherwise the first H264, otherwise the first MPEG4 otherwise the first JPEG stream
+                        let firstH265 = got_profiles.findIndex(item => 
+                            item.videoSourceConfiguration && item.videoEncoderConfiguration
+                            && item.videoSourceConfiguration.sourceToken == videoSource.$.token
+                            && item.videoEncoderConfiguration.encoding == "H265");
+                        let firstH264 = got_profiles.findIndex(item => 
+                            item.videoSourceConfiguration && item.videoEncoderConfiguration
+                            && item.videoSourceConfiguration.sourceToken == videoSource.$.token
+                            && item.videoEncoderConfiguration.encoding == "H264");
+                        let firstMPEG4 = got_profiles.findIndex(item => 
+                            item.videoSourceConfiguration && item.videoEncoderConfiguration
+                            && item.videoSourceConfiguration.sourceToken == videoSource.$.token
+                            && item.videoEncoderConfiguration.encoding == "MPEG4");
+                        let firstJPEG = got_profiles.findIndex(item => 
+                            item.videoSourceConfiguration && item.videoEncoderConfiguration
+                            && item.videoSourceConfiguration.sourceToken == videoSource.$.token
+                            && item.videoEncoderConfiguration.encoding == "JPEG");
+                        let firstOther = got_profiles.findIndex(item => 
+                            item.videoSourceConfiguration && item.videoEncoderConfiguration
+                            && item.videoSourceConfiguration.sourceToken == videoSource.$.token
+                            );
+
+                        if (firstH265 >= 0) bestProfile[src_idx] = got_profiles[firstH265];
+                        else if (firstH264 >= 0) bestProfile[src_idx] = got_profiles[firstH264];
+                        else if (firstMPEG4 >= 0) bestProfile[src_idx] = got_profiles[firstMPEG4];
+                        else if (firstJPEG >= 0) bestProfile[src_idx] = got_profiles[firstJPEG];
+                        else bestProfile[src_idx] = got_profiles[firstOther];
+                    }
+
+                    nimble_callback();
+                },
+                function (nimble_callback) {
+                    try {
                         // The ONVIF device may have multiple Video Sources
                         // eg 4 channel IP encoder or Panoramic Cameras
-                        // Grab a JPEG from each VideoSource
+                        // Grab a JPEG Image from each VideoSource
                         // Note. The Nimble Callback is only called once all ONVIF replies have been returned
-                        let reply_max = cam_obj.activeSources.length;
+                        const reply_max = got_videosources.length;
                         let reply_count = 0;
-                        for (let src_idx = 0; src_idx < cam_obj.activeSources.length; src_idx++) {
-                            let videoSource = cam_obj.activeSources[src_idx];
-                            cam_obj.getSnapshotUri({ profileToken: videoSource.profileToken }, function (err, getUri_result) {
+
+                        for (let src_idx = 0; src_idx < got_videosources.length; src_idx++) {
+                            const videoSource = got_videosources[src_idx];
+
+                            cam_obj.getSnapshotUri({ profileToken: bestProfile[src_idx].$.token}, (err, getUri_result) => {
                                 reply_count++;
 
                                 if (!err && getUri_result) {
 
-                                    got_snapshots.push(getUri_result);
+                                    got_snapshots[src_idx] = {videoSourceToken: videoSource.$.token, uri: getUri_result.uri};
 
                                     const fs = require('fs');
                                     const url = require('url');
 
                                     let filename = "";
-                                    if (cam_obj.activeSources.length === 1) {
+                                    if (got_videosources.length === 1) {
                                         filename = folder + path.sep + 'snapshot_' + ip_entry + '.jpg';
                                     } else {
                                         // add _1, _2, _3 etc for cameras with multiple VideoSources
@@ -375,75 +446,118 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                     } catch (err) { nimble_callback(); }
                 },
                 function (nimble_callback) {
-                    try {
-                        cam_obj.getStreamUri({
-                            protocol: 'RTSP',
-                            stream: 'RTP-Unicast'
-                        }, function (err, stream) {
-                            if (!err) got_live_stream_tcp = stream;
-                            nimble_callback();
-                        });
-                    } catch (err) { nimble_callback(); }
+                    const reply_max = got_videosources.length * 4; // x4 for TCP, UDP, HTTP and MULTICAST URLs
+                    let reply_count = 0;
+                    for (let src_idx = 0; src_idx < got_videosources.length; src_idx++) {
+                        const profileToken = bestProfile[src_idx].$.token;
+
+                        flow.series([
+                            function (inner_nimble_callback) {
+                                try {
+                                    cam_obj.getStreamUri({
+                                        protocol: 'RTSP',
+                                        stream: 'RTP-Unicast',
+                                        profileToken: profileToken
+                                    }, function (err, stream) {
+                                        if (!err) got_livestreams[src_idx].tcp = stream.uri;
+                                        reply_count++;
+                                        inner_nimble_callback();
+                                        if (reply_count == reply_max) nimble_callback();
+                                    });
+                                } catch (err) { 
+                                    inner_nimble_callback();
+                                    reply_count++;
+                                    if (reply_count == reply_max) nimble_callback();
+                                }
+                            },
+                            function (inner_nimble_callback) {
+                                try {
+                                    cam_obj.getStreamUri({
+                                        protocol: 'UDP',
+                                        stream: 'RTP-Unicast',
+                                        profileToken: profileToken
+                                    }, function (err, stream) {
+                                        if (!err) got_livestreams[src_idx].udp = stream.uri;
+                                        reply_count++;
+                                        inner_nimble_callback();
+                                        if (reply_count == reply_max) nimble_callback();
+                                    });
+                                } catch (err) {
+                                    reply_count++;
+                                    inner_nimble_callback();
+                                    if (reply_count == reply_max) nimble_callback();
+                                }
+                            },
+                            function (inner_nimble_callback) {
+                                try {
+                                    cam_obj.getStreamUri({
+                                        protocol: 'HTTP',
+                                        stream: 'RTP-Unicast',
+                                        profileToken: profileToken
+                                    }, function (err, stream) {
+                                        if (!err) got_livestreams[src_idx].http = stream.uri;
+                                        reply_count++;
+                                        inner_nimble_callback();
+                                        if (reply_count == reply_max) nimble_callback();
+                                    });
+                                } catch (err) {
+                                    reply_count++;
+                                    inner_nimble_callback();
+                                    if (reply_count == reply_max) nimble_callback();
+                                }
+                            },
+                            function (inner_nimble_callback) {
+                                /* Multicast is optional in Profile S, Mandatory in Profile T but could be disabled */
+                                try {
+                                    cam_obj.getStreamUri({
+                                        protocol: 'UDP',
+                                        stream: 'RTP-Multicast',
+                                        profileToken: profileToken
+                                    }, function (err, stream, xml) {
+                                        if (!err) got_livestreams[src_idx].multicast = stream.uri;
+                                        reply_count++;
+                                        inner_nimble_callback();
+                                        if (reply_count == reply_max) nimble_callback();
+                                    });
+                                } catch (err) {
+                                    reply_count++;
+                                    inner_nimble_callback();
+                                    if (reply_count == reply_max) nimble_callback();
+                                }
+                            }
+                        ]); // end of inner flow
+                    } // end for loop
+                    
+                    // Note nimble_callback(); is called when all work is done
                 },
-                function (nimble_callback) {
-                    try {
-                        cam_obj.getStreamUri({
-                            protocol: 'UDP',
-                            stream: 'RTP-Unicast'
-                        }, function (err, stream) {
-                            if (!err) got_live_stream_udp = stream;
-                            nimble_callback();
-                        });
-                    } catch (err) { nimble_callback(); }
-                },
-                function (nimble_callback) {
-                    try {
-                        cam_obj.getStreamUri({
-                            protocol: 'HTTP',
-                            stream: 'RTP-Unicast'
-                        }, function (err, stream) {
-                            if (!err) got_live_stream_http = stream;
-                            nimble_callback();
-                        });
-                    } catch (err) { nimble_callback(); }
-                },
-                /* Multicast is optional in Profile S, Mandatory in Profile T
-                but could be disabled
-                function (nimble_callback) {
-                    try {
-                        cam_obj.getStreamUri({
-                            protocol: 'UDP',
-                            stream: 'RTP-Multicast'
-                        }, function (err, stream, xml) {
-                            if (!err) got_live_stream_multicast = stream;
-                            nimble_callback();
-                        });
-                    } catch (err) { nimble_callback(); }
-                },
-                */
                 function (nimble_callback) {
                     console.log('------------------------------');
                     console.log('Host: ' + ip_entry + ' Port: ' + port);
                     console.log('Date: = ' + got_date);
                     console.log('Info: = ' + JSON.stringify(got_info));
-                    if (got_snapshots.length > 0) {
-                        for (let i = 0; i < got_snapshots.length; i++) {
-                            console.log('Snapshot URI: =                ' + got_snapshots[i].uri);
+                    for (let i = 0; i < got_videosources.length; i++) {
+                        let msg = "Video Source " + (i+1) + ' [' + got_videosources[i].$.token + '] [' + bestProfile[i].videoEncoderConfiguration.encoding + ' '
+                        + bestProfile[i].videoEncoderConfiguration.resolution.width + 'x' + bestProfile[i].videoEncoderConfiguration.resolution.height + ']';
+
+                        console.log(msg);
+
+                        if (got_snapshots[i].uri != null) {
+                            console.log('Snapshot URI: =          ' + got_snapshots[i].uri);
                         }
+                        if (got_livestreams[i].tcp != null) {
+                            console.log('Live TCP Stream: =       ' + got_livestreams[i].tcp);
+                        }
+                        if (got_livestreams[i].udp != null) {
+                            console.log('Live UDP Stream: =       ' + got_livestreams[i].udp);
+                        }
+                        if (got_livestreams[i].http != null) {
+                            console.log('Live HTTP Stream: =      ' + got_livestreams[i].http);
+                        }
+                        if (got_livestreams[i].multicast != null) {
+                            console.log('Live Multicast Stream: = ' + got_livestreams[i].multicast);
+                        }
+                        console.log('------------------------------');
                     }
-                    if (got_live_stream_tcp) {
-                        console.log('First Live TCP Stream: =       ' + got_live_stream_tcp.uri);
-                    }
-                    if (got_live_stream_udp) {
-                        console.log('First Live UDP Stream: =       ' + got_live_stream_udp.uri);
-                    }
-                    if (got_live_stream_http) {
-                        console.log('First Live HTTP Stream: =      ' + got_live_stream_http.uri);
-                    }
-                    if (got_live_stream_multicast) {
-                        console.log('First Live Multicast Stream: = ' + got_live_stream_multicast.uri);
-                    }
-                    console.log('------------------------------');
 
                     let log_filename = folder + path.sep + 'camera_report_' + ip_entry + '.txt';
                     let log_fd;
@@ -478,11 +592,26 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                             msg += 'Serial Number:= unknown\r\n';
                             msg += 'Hardware ID:= unknown\r\n';
                         }
-                        if (got_live_stream_tcp) {
-                            msg += 'First Live TCP Stream: =       ' + got_live_stream_tcp.uri + '\r\n';
-                        }
-                        if (got_live_stream_udp) {
-                            msg += 'First Live UDP Stream: =       ' + got_live_stream_udp.uri + '\r\n';
+                        for (let i = 0; i < got_videosources.length; i++) {
+                            msg += "Video Source " + (i+1) + ' [' + got_videosources[i].$.token + '] [' + bestProfile[i].videoEncoderConfiguration.encoding + ' '
+                            + bestProfile[i].videoEncoderConfiguration.resolution.width + 'x' + bestProfile[i].videoEncoderConfiguration.resolution.height + ']\r\n';
+
+                            if (got_snapshots[i].uri != null) {
+                                msg += 'Snapshot URL: =          ' + got_snapshots[i].uri + '\r\n';
+                            }
+
+                            if (got_livestreams[i].tcp != null) {
+                                msg += 'Live TCP Stream: =       ' + got_livestreams[i].tcp + '\r\n';
+                            }
+                            if (got_livestreams[i].udp != null) {
+                                msg += 'Live UDP Stream: =       ' + got_livestreams[i].udp + '\r\n';
+                            }
+                            if (got_livestreams[i].http != null) {
+                                msg += 'Live HTTP Stream: =      ' + got_livestreams[i].http + '\r\n';
+                            }
+                            if (got_livestreams[i].multicast != null) {
+                                msg += 'Live Multicast Stream: = ' + got_livestreams[i].multicast + '\r\n';
+                            }
                         }
                         fs.write(log_fd, msg, function (err) {
                             if (err)
@@ -500,6 +629,11 @@ function perform_audit(ip_addresses, port, username, password, folder) {
             ]); // end flow
 
         });
+
+        // Log ONVIF XML Messages from the Onvif Library
+        //c.on("rawRequest", (data) => console.log("\nTX DATA:", data));
+        //c.on("rawResponse", (data) => console.log("\nRX DATA:", data));
+
     }); // foreach
 }
 
