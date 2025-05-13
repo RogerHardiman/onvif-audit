@@ -121,9 +121,9 @@ if (args.scan) {
                 // For example <MyTag>HELLO</MyTag> does not use the '$' or '_' fields.
                 // To make things easier to handle, we use parser options to place the data we want in a 'payload' field
 
-                let urn = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['EndpointReference'][0]['Address'][0].payload;
-                let xaddrs = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['XAddrs'][0].payload;
-                let scopes = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['Scopes'][0].payload;
+                let urn = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['EndpointReference'][0]['Address'][0].payload.trim();
+                let xaddrs = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['XAddrs'][0].payload.trim(); // Axis add whitespace on end. Remove it.
+                let scopes = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['Scopes'][0].payload.trim(); // Axis add whitespace on end. Remove it.
                 scopes = scopes.split(" ");
 
                 let hardware = "";
