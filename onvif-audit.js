@@ -24,7 +24,8 @@ var path = require('path');
 var xml2js = require('xml2js')
 var stripPrefix = require('xml2js').processors.stripPrefix;
 
-
+let start_time = dateTime.create();
+let start_time_YYYYMMDDHHMMSS = start_time.format('Y_m_d_H_M_S');
 
 // Show Version
 var version = require('./package.json').version;
@@ -52,18 +53,15 @@ if (!args.filename && !args.ipaddress && !args.scan) {
     process.exit(1);
 }
 
-let time_now = dateTime.create();
-let outputfolder = 'onvif_audit_report_' + time_now.format('Y_m_d_H_M_S');
+let outputfolder = 'onvif_audit_report_' + start_time_YYYYMMDDHHMMSS;
 if (args.outputfolder) {
     outputfolder = args.outputfolder;
 }
 
-if (fs.existsSync(outputfolder)) {
-    console.log('Output folder already exists.');
-    process.exit(1)
-}
 try {
-    fs.mkdirSync(outputfolder);
+    if (fs.existsSync(outputfolder) == false) {
+        fs.mkdirSync(outputfolder);
+    }
 } catch (e) {
     console.log('Unable to create output folder')
     process.exit(1)
@@ -412,13 +410,12 @@ function perform_audit(ip_addresses, port, username, password, outputfolder) {
                                     const fs = require('fs');
                                     const url = require('url');
 
-                                    let filename = "";
-                                    if (got_videosources.length === 1) {
-                                        filename = outputfolder + path.sep + 'snapshot_' + ip_entry + '.jpg';
-                                    } else {
+                                    let filename = outputfolder + path.sep + start_time_YYYYMMDDHHMMSS + '_snapshot_' + ip_entry;
+                                    if (got_videosources.length > 1) {
                                         // add _1, _2, _3 etc for cameras with multiple VideoSources
-                                        filename = outputfolder + path.sep + 'snapshot_' + ip_entry + '_' + (src_idx + 1) + '.jpg';
+                                        filename += '_' + (src_idx + 1);
                                     }
+                                    filename += '.jpg';
                                     let uri = url.parse(getUri_result.uri);
 
                                     // handle the case where the camera is behind NAT
@@ -584,7 +581,7 @@ function perform_audit(ip_addresses, port, username, password, outputfolder) {
                         console.log('------------------------------');
                     }
 
-                    let log_filename = outputfolder + path.sep + 'camera_report_' + ip_entry + '.txt';
+                    let log_filename = outputfolder + path.sep + start_time_YYYYMMDDHHMMSS + '_camera_report_' + ip_entry + '.txt';
                     let log_fd;
 
                     fs.open(log_filename, 'w', function (err, fd) {
