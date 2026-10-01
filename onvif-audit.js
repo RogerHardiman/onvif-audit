@@ -58,6 +58,10 @@ if (args.outputfolder) {
     outputfolder = args.outputfolder;
 }
 
+if (fs.existsSync(outputfolder)) {
+    console.log('Output folder already exists.');
+    process.exit(1)
+}
 try {
     fs.mkdirSync(outputfolder);
 } catch (e) {
@@ -277,10 +281,20 @@ function perform_audit(ip_addresses, port, username, password, outputfolder) {
 
             let cam_obj = this;
 
+            let xmlLog = [];
             // Log ONVIF XML Messages from the Onvif Library
             if (args.xml) {
-                cam_obj.on("rawRequest", (data) => console.log(`\nTX DATA [${ip_entry}:${port}]: ${data}`));
-                cam_obj.on("rawResponse", (data) => console.log(`\nRX DATA [${ip_entry}:${port}]: ${data}`));
+                cam_obj.on("rawRequest", (data) => {
+                    const msg = `\nTX DATA [${ip_entry}:${port}]: ${data}`;
+                    xmlLog.push(msg + '\r\n');
+                    console.log(msg);
+                });
+                cam_obj.on("rawResponse", (data) => {
+                    
+                    const msg = `\nRX DATA [${ip_entry}:${port}]: ${data}`;
+                    xmlLog.push(msg + '\r\n');
+                    console.log(msg);
+                });
             }
 
             let got_date;
@@ -629,6 +643,15 @@ function perform_audit(ip_addresses, port, username, password, outputfolder) {
                                 console.log('Error writing to file');
                         });
 
+                        msg = "";
+                        for (const item of xmlLog) {
+                            msg += item;
+                        }
+
+                        fs.write(log_fd, msg, function (err) {
+                            if (err)
+                                console.log('Error writing to file');
+                        });
                     });
 
 
@@ -640,10 +663,6 @@ function perform_audit(ip_addresses, port, username, password, outputfolder) {
             ]); // end flow
 
         });
-
-        // Log ONVIF XML Messages from the Onvif Library
-        //c.on("rawRequest", (data) => console.log("\nTX DATA:", data));
-        //c.on("rawResponse", (data) => console.log("\nRX DATA:", data));
 
     }); // foreach
 }
