@@ -1,6 +1,6 @@
 # onvif-audit
 
-onvif-audit will scan a network looking for ONVIF cameras and create an audit log folder containing
+onvif-audit will scan a network looking for ONVIF cameras and create an audit log output folder containing
 
 * Text File which reports the Camera Make and Model and Serial Number and the Camera Time (to check Time Sync Errors)
 * JPEG Snapshot of the camera view

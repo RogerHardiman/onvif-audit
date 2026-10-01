@@ -4,7 +4,7 @@
  * Licenced with the MIT Licence
  *
  * Perform a brute force scan of the network looking for ONVIF devices
- * For each device, save the make and model and a snapshot in the audit folder
+ * For each device, save the make and model and a snapshot in the audit output folder
  *
  * Can also use ONVIF Discovery to trigger the scan
  */
@@ -36,6 +36,8 @@ args.option('-P, --port <value>', 'ONVIF Port. Default 80');
 args.option('-u, --username <value>', 'ONVIF Username');
 args.option('-p, --password <value>', 'ONVIF Password');
 args.option('-s, --scan', 'Discover Network devices on local subnet');
+args.option('-x, --xml', 'Log ONVIF SOAP XML messages');
+args.option('-o, --outputfolder <value>', 'Output Folder. Default is onvif_audit_report_YYYY_MM_DD_HH_MM_SS');
 args.parse(process.argv);
 
 if (!args) {
@@ -51,12 +53,15 @@ if (!args.filename && !args.ipaddress && !args.scan) {
 }
 
 let time_now = dateTime.create();
-let folder = 'onvif_audit_report_' + time_now.format('Y_m_d_H_M_S');
+let outputfolder = 'onvif_audit_report_' + time_now.format('Y_m_d_H_M_S');
+if (args.outputfolder) {
+    outputfolder = args.outputfolder;
+}
 
 try {
-    fs.mkdirSync(folder);
+    fs.mkdirSync(outputfolder);
 } catch (e) {
-    console.log('Unable to create log folder')
+    console.log('Unable to create output folder')
     process.exit(1)
 }
 
@@ -70,7 +75,7 @@ if (args.ipaddress) {
 
 
     // Perform an Audit of all the cameras in the IP address Range
-    perform_audit(IPADDRESS, PORT, USERNAME, PASSWORD, folder);
+    perform_audit(IPADDRESS, PORT, USERNAME, PASSWORD, outputfolder);
 }
 
 if (args.filename) {
@@ -88,7 +93,7 @@ if (args.filename) {
             if (item.username) USERNAME = item.username;
             if (item.password) PASSWORD = item.password;
 
-            perform_audit(IPADDRESS, PORT, USERNAME, PASSWORD, folder);
+            perform_audit(IPADDRESS, PORT, USERNAME, PASSWORD, outputfolder);
         }
         );
     }
@@ -199,7 +204,7 @@ if (args.scan) {
 // program ends here (just functions below)
 
 
-function perform_audit(ip_addresses, port, username, password, folder) {
+function perform_audit(ip_addresses, port, username, password, outputfolder) {
 
     let ip_list = [];
 
@@ -255,7 +260,7 @@ function perform_audit(ip_addresses, port, username, password, folder) {
             username: username,
             password: password,
             port: port,
-            timeout: 5000
+            timeout: 10000
         }, function CamFunc(err) {
             if (err) {
                 if (shown_error == false) {
@@ -271,6 +276,12 @@ function perform_audit(ip_addresses, port, username, password, folder) {
             }
 
             let cam_obj = this;
+
+            // Log ONVIF XML Messages from the Onvif Library
+            if (args.xml) {
+                cam_obj.on("rawRequest", (data) => console.log(`\nTX DATA [${ip_entry}:${port}]: ${data}`));
+                cam_obj.on("rawResponse", (data) => console.log(`\nRX DATA [${ip_entry}:${port}]: ${data}`));
+            }
 
             let got_date;
             let got_info;
@@ -389,10 +400,10 @@ function perform_audit(ip_addresses, port, username, password, folder) {
 
                                     let filename = "";
                                     if (got_videosources.length === 1) {
-                                        filename = folder + path.sep + 'snapshot_' + ip_entry + '.jpg';
+                                        filename = outputfolder + path.sep + 'snapshot_' + ip_entry + '.jpg';
                                     } else {
                                         // add _1, _2, _3 etc for cameras with multiple VideoSources
-                                        filename = folder + path.sep + 'snapshot_' + ip_entry + '_' + (src_idx + 1) + '.jpg';
+                                        filename = outputfolder + path.sep + 'snapshot_' + ip_entry + '_' + (src_idx + 1) + '.jpg';
                                     }
                                     let uri = url.parse(getUri_result.uri);
 
@@ -559,7 +570,7 @@ function perform_audit(ip_addresses, port, username, password, folder) {
                         console.log('------------------------------');
                     }
 
-                    let log_filename = folder + path.sep + 'camera_report_' + ip_entry + '.txt';
+                    let log_filename = outputfolder + path.sep + 'camera_report_' + ip_entry + '.txt';
                     let log_fd;
 
                     fs.open(log_filename, 'w', function (err, fd) {
