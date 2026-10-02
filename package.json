@@ -1,6 +1,6 @@
 {
   "name": "onvif-site-audit",
-  "version": "1.6.0",
+  "version": "2.0.0",
   "author": "Roger Hardiman <contact@rjh.org.uk>",
   "description": "ONVIF Camera Audit Tool",
   "main": "/audit.js",
@@ -20,9 +20,8 @@
   },
   "dependencies": {
     "commander": "^4.0.1",
-    "nimble": "0.0.2",
     "node-datetime": "^2.1.2",
-    "onvif": "https://github.com/agsh/onvif.git#cc4e57f",
+    "onvif": "https://github.com/agsh/onvif.git#3fb640b6aabe7c4c7a66eceb8cd05165c8217b8f",
     "request-digest": "^1.0.13",
     "xml2js": "^0.6.2"
   },

@@ -1,10 +1,11 @@
 /**
  * (C) Roger Hardiman <opensource@rjh.org.uk>
- * First Release - May 2018
+ * First Release - May 2018. Updated 2026.
+ * Updated to V1.x ONVIF Library - September 2026
  * Licenced with the MIT Licence
  *
  * Perform a brute force scan of the network looking for ONVIF devices
- * For each device, save the make and model and a snapshot in the audit output folder
+ * For each device, save the make and model and a snapshot in the output folder
  *
  * Can also use ONVIF Discovery to trigger the scan
  */
@@ -15,8 +16,6 @@ var IPADDRESS = '192.168.1.1-192.168.1.254', // single address or a range
     PASSWORD = 'onvifpassword';
 
 var onvif = require('onvif');
-var Cam = onvif.Cam;
-var flow = require('nimble');
 var args = require('commander');
 var fs = require('fs');
 var dateTime = require('node-datetime');
@@ -63,7 +62,7 @@ try {
         fs.mkdirSync(outputfolder);
     }
 } catch (e) {
-    console.log('Unable to create output folder')
+    console.log('Unable to create output folder ' + outputfolder)
     process.exit(1)
 }
 
@@ -162,9 +161,10 @@ if (args.scan) {
 
     // start the probe
     // resolve=false  means Do not create Cam objects
-    onvif.Discovery.probe({ resolve: false }, function() {
+    onvif.Discovery.probe({ resolve: false })
+    .then(() => {
         // completion callback
-        process.stdout.write("\n");
+        process.stdout.write("\nProbe Complete\n");
 
         // sort the Scan Results by IP Address
         scanResults.sort((a,b) => { 
@@ -204,9 +204,10 @@ if (args.scan) {
 
 
 // program ends here (just functions below)
-
-
-function perform_audit(ip_addresses, port, username, password, outputfolder) {
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+async function perform_audit(ip_addresses, port, username, password, outputfolder) {
 
     let ip_list = [];
 
@@ -248,7 +249,7 @@ function perform_audit(ip_addresses, port, username, password, outputfolder) {
     console.error = function () { };
 
     // try each IP address and each Port
-    ip_list.forEach(function (ip_entry) {
+    ip_list.forEach(async function (ip_entry) {
 
         // workaround the ONVIF Library API
         // Cam() with a username and password tries to connect (and genertes a callback error)
@@ -257,410 +258,359 @@ function perform_audit(ip_addresses, port, username, password, outputfolder) {
 
         console.log("Connecting to " + ip_entry + ':' + port);
 
-        const c = new Cam({
+        const cam_obj = new onvif.Onvif({
             hostname: ip_entry,
             username: username,
             password: password,
             port: port,
             timeout: 10000
-        }, function CamFunc(err) {
-            if (err) {
-                if (shown_error == false) {
-                    console.log('------------------------------');
-                    console.log("Cannot connect to " + ip_entry + ":" + port);
-                    // cut the error at \n
-                    if (err.message) console.log(err.message);
-                    else console.log(err);
-                    console.log('------------------------------');
-                    shown_error = true;
-                }
-                return;
-            }
-
-            let cam_obj = this;
-
-            let xmlLog = [];
-            // Log ONVIF XML Messages from the Onvif Library
-            if (args.xml) {
-                cam_obj.on("rawRequest", (data) => {
-                    const msg = `\nTX DATA [${ip_entry}:${port}]: ${data}`;
-                    xmlLog.push(msg + '\r\n');
-                    console.log(msg);
-                });
-                cam_obj.on("rawResponse", (data) => {
-                    
-                    const msg = `\nRX DATA [${ip_entry}:${port}]: ${data}`;
-                    xmlLog.push(msg + '\r\n');
-                    console.log(msg);
-                });
-            }
-
-            let got_date;
-            let got_info;
-            let got_videosources = [];
-            let got_profiles = [];
-            let bestProfile = []; // The preferred Profile indexed by Video Source.
-            let got_snapshots = []; // JPEG Imag URLs, indexed by Video Source
-            let got_livestreams = []; // RTSP URLs, indexed by Video Source
-
-            // Use Nimble to execute each ONVIF function in turn
-            // This is used so we can wait on all ONVIF replies before
-            // writing to the console
-            flow.series([
-                function (nimble_callback) {
-                    cam_obj.getSystemDateAndTime(function (err, date) {
-                        if (!err) got_date = date;
-                        nimble_callback();
-                    });
-                },
-                function (nimble_callback) {
-                    cam_obj.getDeviceInformation(function (err, info) {
-                        if (!err) got_info = info;
-                        nimble_callback();
-                    });
-                },
-                function (nimble_callback) {
-                    try {
-                        cam_obj.getVideoSources(function (err, videoSources) {
-                            if (!err) {
-                                got_videosources = videoSources;
-
-                                for (let i = 0; i < got_videosources.length; i++) {
-                                    // create empty placeholders
-                                    bestProfile.push({});
-                                    got_snapshots.push({videoSourceToken: null, uri: null});
-                                    got_livestreams.push({tcp: null, udp: null, http: null, multicast: null});
-                                }
-                            }
-                            nimble_callback();
-                        });
-                    } catch {
-                        nimble_callback();
-                    }
-                },
-                function (nimble_callback) {
-                    try {
-                        cam_obj.getProfiles(function (err, profiles) {
-                            if (!err) got_profiles = profiles;
-                            nimble_callback();
-                        });
-                    } catch {
-                        nimble_callback();
-                    }
-                },
-                function (nimble_callback) {
-                    // Compare VideoSources with Profiles.
-                    // Get the 'best' ONVIF Profile Token for each Video Source
-                    for (let src_idx = 0; src_idx < got_videosources.length; src_idx++) {
-                        const videoSource = got_videosources[src_idx];
-
-                        // Get the 'best' profile for this videoSource token
-                        // For most cameras we just find the first Profile which has the Video Source Token
-                        // but Hanwha emit the JPEG Profile first, then H264, then H265. So we have to find the 'best' Profile ourselves.
-                        // The Best one is the first H265, otherwise the first H264, otherwise the first MPEG4 otherwise the first JPEG stream
-                        let firstH265 = got_profiles.findIndex(item => 
-                            item.videoSourceConfiguration && item.videoEncoderConfiguration
-                            && item.videoSourceConfiguration.sourceToken == videoSource.$.token
-                            && item.videoEncoderConfiguration.encoding == "H265");
-                        let firstH264 = got_profiles.findIndex(item => 
-                            item.videoSourceConfiguration && item.videoEncoderConfiguration
-                            && item.videoSourceConfiguration.sourceToken == videoSource.$.token
-                            && item.videoEncoderConfiguration.encoding == "H264");
-                        let firstMPEG4 = got_profiles.findIndex(item => 
-                            item.videoSourceConfiguration && item.videoEncoderConfiguration
-                            && item.videoSourceConfiguration.sourceToken == videoSource.$.token
-                            && item.videoEncoderConfiguration.encoding == "MPEG4");
-                        let firstJPEG = got_profiles.findIndex(item => 
-                            item.videoSourceConfiguration && item.videoEncoderConfiguration
-                            && item.videoSourceConfiguration.sourceToken == videoSource.$.token
-                            && item.videoEncoderConfiguration.encoding == "JPEG");
-                        let firstOther = got_profiles.findIndex(item => 
-                            item.videoSourceConfiguration && item.videoEncoderConfiguration
-                            && item.videoSourceConfiguration.sourceToken == videoSource.$.token
-                            );
-
-                        if (firstH265 >= 0) bestProfile[src_idx] = got_profiles[firstH265];
-                        else if (firstH264 >= 0) bestProfile[src_idx] = got_profiles[firstH264];
-                        else if (firstMPEG4 >= 0) bestProfile[src_idx] = got_profiles[firstMPEG4];
-                        else if (firstJPEG >= 0) bestProfile[src_idx] = got_profiles[firstJPEG];
-                        else bestProfile[src_idx] = got_profiles[firstOther];
-                    }
-
-                    nimble_callback();
-                },
-                function (nimble_callback) {
-                    try {
-                        // The ONVIF device may have multiple Video Sources
-                        // eg 4 channel IP encoder or Panoramic Cameras
-                        // Grab a JPEG Image from each VideoSource
-                        // Note. The Nimble Callback is only called once all ONVIF replies have been returned
-                        const reply_max = got_videosources.length;
-                        let reply_count = 0;
-
-                        for (let src_idx = 0; src_idx < got_videosources.length; src_idx++) {
-                            const videoSource = got_videosources[src_idx];
-
-                            cam_obj.getSnapshotUri({ profileToken: bestProfile[src_idx].$.token}, (err, getUri_result) => {
-                                reply_count++;
-
-                                if (!err && getUri_result) {
-
-                                    got_snapshots[src_idx] = {videoSourceToken: videoSource.$.token, uri: getUri_result.uri};
-
-                                    const fs = require('fs');
-                                    const url = require('url');
-
-                                    let filename = outputfolder + path.sep + start_time_YYYYMMDDHHMMSS + '_snapshot_' + ip_entry;
-                                    if (got_videosources.length > 1) {
-                                        // add _1, _2, _3 etc for cameras with multiple VideoSources
-                                        filename += '_' + (src_idx + 1);
-                                    }
-                                    filename += '.jpg';
-                                    let uri = url.parse(getUri_result.uri);
-
-                                    // handle the case where the camera is behind NAT
-                                    // ONVIF Standard now says use XAddr for camera
-                                    // and ignore the IP address in the Snapshot URI
-                                    uri.host = ip_entry;
-                                    uri.username = username;
-                                    uri.password = password;
-                                    if (!uri.port) uri.port = 80;
-
-                                    let digestRequest = require('request-digest')(username, password);
-                                    digestRequest.request({
-                                        host: 'http://' + uri.host,
-                                        path: uri.path,
-                                        port: uri.port,
-                                        encoding: null, // return data as a Buffer()
-                                        method: 'GET'
-                                        //                             headers: {
-                                        //                               'Custom-Header': 'OneValue',
-                                        //                               'Other-Custom-Header': 'OtherValue'
-                                        //                             }
-                                    }, function (error, response, body) {
-                                        if (error) {
-                                            // console.log('Error downloading snapshot');
-                                            // throw error;
-                                        } else {
-
-                                            fs.open(filename, 'w', function (err) {
-                                                // callback for file opened, or file open error
-                                                if (err) {
-                                                    console.log('ERROR - cannot create output log file');
-                                                    console.log(err);
-                                                    console.log('');
-                                                    process.exit(1);
-                                                }
-                                                fs.appendFile(filename, body, function (err) {
-                                                    if (err) {
-                                                        console.log('Error writing to file');
-                                                    }
-                                                });
-
-                                            });
-                                        }
-                                    });
-                                }
-
-                                if (reply_count === reply_max) nimble_callback(); // let 'flow' move on. JPEG GET is still async
-                            });
-                        } // end for
-                    } catch (err) { nimble_callback(); }
-                },
-                function (nimble_callback) {
-                    const reply_max = got_videosources.length * 4; // x4 for TCP, UDP, HTTP and MULTICAST URLs
-                    let reply_count = 0;
-                    for (let src_idx = 0; src_idx < got_videosources.length; src_idx++) {
-                        const profileToken = bestProfile[src_idx].$.token;
-
-                        flow.series([
-                            function (inner_nimble_callback) {
-                                try {
-                                    cam_obj.getStreamUri({
-                                        protocol: 'RTSP',
-                                        stream: 'RTP-Unicast',
-                                        profileToken: profileToken
-                                    }, function (err, stream) {
-                                        if (!err) got_livestreams[src_idx].tcp = stream.uri;
-                                        reply_count++;
-                                        inner_nimble_callback();
-                                        if (reply_count == reply_max) nimble_callback();
-                                    });
-                                } catch (err) { 
-                                    inner_nimble_callback();
-                                    reply_count++;
-                                    if (reply_count == reply_max) nimble_callback();
-                                }
-                            },
-                            function (inner_nimble_callback) {
-                                try {
-                                    cam_obj.getStreamUri({
-                                        protocol: 'UDP',
-                                        stream: 'RTP-Unicast',
-                                        profileToken: profileToken
-                                    }, function (err, stream) {
-                                        if (!err) got_livestreams[src_idx].udp = stream.uri;
-                                        reply_count++;
-                                        inner_nimble_callback();
-                                        if (reply_count == reply_max) nimble_callback();
-                                    });
-                                } catch (err) {
-                                    reply_count++;
-                                    inner_nimble_callback();
-                                    if (reply_count == reply_max) nimble_callback();
-                                }
-                            },
-                            function (inner_nimble_callback) {
-                                try {
-                                    cam_obj.getStreamUri({
-                                        protocol: 'HTTP',
-                                        stream: 'RTP-Unicast',
-                                        profileToken: profileToken
-                                    }, function (err, stream) {
-                                        if (!err) got_livestreams[src_idx].http = stream.uri;
-                                        reply_count++;
-                                        inner_nimble_callback();
-                                        if (reply_count == reply_max) nimble_callback();
-                                    });
-                                } catch (err) {
-                                    reply_count++;
-                                    inner_nimble_callback();
-                                    if (reply_count == reply_max) nimble_callback();
-                                }
-                            },
-                            function (inner_nimble_callback) {
-                                /* Multicast is optional in Profile S, Mandatory in Profile T but could be disabled */
-                                try {
-                                    cam_obj.getStreamUri({
-                                        protocol: 'UDP',
-                                        stream: 'RTP-Multicast',
-                                        profileToken: profileToken
-                                    }, function (err, stream, xml) {
-                                        if (!err) got_livestreams[src_idx].multicast = stream.uri;
-                                        reply_count++;
-                                        inner_nimble_callback();
-                                        if (reply_count == reply_max) nimble_callback();
-                                    });
-                                } catch (err) {
-                                    reply_count++;
-                                    inner_nimble_callback();
-                                    if (reply_count == reply_max) nimble_callback();
-                                }
-                            }
-                        ]); // end of inner flow
-                    } // end for loop
-                    
-                    // Note nimble_callback(); is called when all work is done
-                },
-                function (nimble_callback) {
-                    console.log('------------------------------');
-                    console.log('Host: ' + ip_entry + ' Port: ' + port);
-                    console.log('Date: = ' + got_date);
-                    console.log('Info: = ' + JSON.stringify(got_info));
-                    for (let i = 0; i < got_videosources.length; i++) {
-                        let msg = "Video Source " + (i+1) + ' [' + got_videosources[i].$.token + '] [' + bestProfile[i].videoEncoderConfiguration.encoding + ' '
-                        + bestProfile[i].videoEncoderConfiguration.resolution.width + 'x' + bestProfile[i].videoEncoderConfiguration.resolution.height + ']';
-
-                        console.log(msg);
-
-                        if (got_snapshots[i].uri != null) {
-                            console.log('Snapshot URI: =          ' + got_snapshots[i].uri);
-                        }
-                        if (got_livestreams[i].tcp != null) {
-                            console.log('Live TCP Stream: =       ' + got_livestreams[i].tcp);
-                        }
-                        if (got_livestreams[i].udp != null) {
-                            console.log('Live UDP Stream: =       ' + got_livestreams[i].udp);
-                        }
-                        if (got_livestreams[i].http != null) {
-                            console.log('Live HTTP Stream: =      ' + got_livestreams[i].http);
-                        }
-                        if (got_livestreams[i].multicast != null) {
-                            console.log('Live Multicast Stream: = ' + got_livestreams[i].multicast);
-                        }
-                        console.log('------------------------------');
-                    }
-
-                    let log_filename = outputfolder + path.sep + start_time_YYYYMMDDHHMMSS + '_camera_report_' + ip_entry + '.txt';
-                    let log_fd;
-
-                    fs.open(log_filename, 'w', function (err, fd) {
-                        if (err) {
-                            console.log('ERROR - cannot create output file ' + log_filename);
-                            console.log(err);
-                            console.log('');
-                            process.exit(1);
-                        }
-                        log_fd = fd;
-                        //console.log('Log File Open (' + log_filename + ')');
-
-                        // write to log file in the Open callback
-                        let msg = 'Host:= ' + ip_entry + ' Port:= ' + port + '\r\n';
-                        if (got_date) {
-                            msg += 'Date:= ' + got_date + '\r\n';
-                        } else {
-                            msg += 'Date:= unknown\r\n';
-                        }
-                        if (got_info) {
-                            msg += 'Manufacturer:= ' + got_info.manufacturer + '\r\n';
-                            msg += 'Model:= ' + got_info.model + '\r\n';
-                            msg += 'Firmware Version:= ' + got_info.firmwareVersion + '\r\n';
-                            msg += 'Serial Number:= ' + got_info.serialNumber + '\r\n';
-                            msg += 'Hardware ID:= ' + got_info.hardwareId + '\r\n';
-                        } else {
-                            msg += 'Manufacturer:= unknown\r\n';
-                            msg += 'Model:= unknown\r\n';
-                            msg += 'Firmware Version:= unknown\r\n';
-                            msg += 'Serial Number:= unknown\r\n';
-                            msg += 'Hardware ID:= unknown\r\n';
-                        }
-                        for (let i = 0; i < got_videosources.length; i++) {
-                            msg += "Video Source " + (i+1) + ' [' + got_videosources[i].$.token + '] [' + bestProfile[i].videoEncoderConfiguration.encoding + ' '
-                            + bestProfile[i].videoEncoderConfiguration.resolution.width + 'x' + bestProfile[i].videoEncoderConfiguration.resolution.height + ']\r\n';
-
-                            if (got_snapshots[i].uri != null) {
-                                msg += 'Snapshot URL: =          ' + got_snapshots[i].uri + '\r\n';
-                            }
-
-                            if (got_livestreams[i].tcp != null) {
-                                msg += 'Live TCP Stream: =       ' + got_livestreams[i].tcp + '\r\n';
-                            }
-                            if (got_livestreams[i].udp != null) {
-                                msg += 'Live UDP Stream: =       ' + got_livestreams[i].udp + '\r\n';
-                            }
-                            if (got_livestreams[i].http != null) {
-                                msg += 'Live HTTP Stream: =      ' + got_livestreams[i].http + '\r\n';
-                            }
-                            if (got_livestreams[i].multicast != null) {
-                                msg += 'Live Multicast Stream: = ' + got_livestreams[i].multicast + '\r\n';
-                            }
-                        }
-                        fs.write(log_fd, msg, function (err) {
-                            if (err)
-                                console.log('Error writing to file');
-                        });
-
-                        msg = "";
-                        for (const item of xmlLog) {
-                            msg += item;
-                        }
-
-                        fs.write(log_fd, msg, function (err) {
-                            if (err)
-                                console.log('Error writing to file');
-                        });
-                    });
-
-
-
-
-                    nimble_callback();
-                },
-
-            ]); // end flow
-
         });
 
+        let xmlLog = [];
+        // Log ONVIF XML Messages from the Onvif Library
+        if (args.xml) {
+            cam_obj.on("rawRequest", (data) => {
+                const msg = `\nTX DATA [${ip_entry}:${port}]: ${data}`;
+                xmlLog.push(msg + '\r\n');
+                console.log(msg);
+            });
+            cam_obj.on("rawResponse", (data) => {
+                
+                const msg = `\nRX DATA [${ip_entry}:${port}]: ${data}`;
+                xmlLog.push(msg + '\r\n');
+                console.log(msg);
+            });
+        }
+
+        try {
+            await cam_obj.connect();
+            console.log('------------------------------');
+            console.log("Connected to " + ip_entry + ":" + port);
+        } catch (err) {
+            if (shown_error == false) {
+                console.log('------------------------------');
+                console.log("Cannot connect to " + ip_entry + ":" + port);
+                // cut the error at \n
+                if (err.message) console.log(err.message);
+                else console.log(err);
+                console.log('------------------------------');
+                shown_error = true;
+            }
+            return;
+        }
+
+        let got_date;
+        let timeAndDate;
+        let got_info;
+        let got_videosources = [];
+        let got_profiles = [];
+        let bestProfile = []; // The preferred Profile indexed by Video Source.
+        let got_snapshots = []; // JPEG Imag URLs, indexed by Video Source
+        let got_livestreams = []; // RTSP URLs, indexed by Video Source
+
+        // Use await to execute each ONVIF function in turn
+        try {
+            got_date = await cam_obj.device.getSystemDateAndTime();
+
+            let dt = got_date.UTCDateTime || got_date.localDateTime; // Prefer UTC. If not present, use Local Time
+            if (dt === undefined) {
+                // Seen on a cheap Chinese camera from GWellTimes-IPC. Use the current time.
+                timeAndDate = new Date();
+            } else {
+                timeAndDate = new Date(Date.UTC(dt.date.year, dt.date.month - 1, dt.date.day, dt.time.hour, dt.time.minute, dt.time.second));
+            }
+        } catch (err) {}
+
+        try {
+            got_info = await cam_obj.device.getDeviceInformation();
+        } catch (err) {}
+
+        try {
+            got_videosources = await cam_obj.media.getVideoSources();
+
+            for (let i = 0; i < got_videosources.length; i++) {
+                // create empty placeholders
+                bestProfile.push({});
+                got_snapshots.push({videoSourceToken: null, uri: null});
+                got_livestreams.push({tcp: null, udp: null, http: null, multicast: null});
+            }
+        } catch (err) {
+            console.log(err);
+        }
+
+        try {
+            got_profiles = await cam_obj.media.getProfiles();
+        } catch (err) {
+            console.log(err);
+        }
+
+        // Compare VideoSources with Profiles.
+        // Get the 'best' ONVIF Profile Token for each Video Source
+        for (let src_idx = 0; src_idx < got_videosources.length; src_idx++) {
+            const videoSource = got_videosources[src_idx];
+
+            // Get the 'best' profile for this videoSource token
+            // For most cameras we just find the first Profile which has the Video Source Token
+            // but Hanwha emit the JPEG Profile first, then H264, then H265. So we have to find the 'best' Profile ourselves.
+            // The Best one is the first H265, otherwise the first H264, otherwise the first MPEG4 otherwise the first JPEG stream
+            let firstH265 = got_profiles.findIndex(item => 
+                item.videoSourceConfiguration && item.videoEncoderConfiguration
+                && item.videoSourceConfiguration.sourceToken == videoSource.token
+                && item.videoEncoderConfiguration.encoding == "H265");
+            let firstH264 = got_profiles.findIndex(item => 
+                item.videoSourceConfiguration && item.videoEncoderConfiguration
+                && item.videoSourceConfiguration.sourceToken == videoSource.token
+                && item.videoEncoderConfiguration.encoding == "H264");
+            let firstMPEG4 = got_profiles.findIndex(item => 
+                item.videoSourceConfiguration && item.videoEncoderConfiguration
+                && item.videoSourceConfiguration.sourceToken == videoSource.token
+                && item.videoEncoderConfiguration.encoding == "MPEG4");
+            let firstJPEG = got_profiles.findIndex(item => 
+                item.videoSourceConfiguration && item.videoEncoderConfiguration
+                && item.videoSourceConfiguration.sourceToken == videoSource.token
+                && item.videoEncoderConfiguration.encoding == "JPEG");
+            let firstOther = got_profiles.findIndex(item => 
+                item.videoSourceConfiguration && item.videoEncoderConfiguration
+                && item.videoSourceConfiguration.sourceToken == videoSource.token
+                );
+
+            if (firstH265 >= 0) bestProfile[src_idx] = got_profiles[firstH265];
+            else if (firstH264 >= 0) bestProfile[src_idx] = got_profiles[firstH264];
+            else if (firstMPEG4 >= 0) bestProfile[src_idx] = got_profiles[firstMPEG4];
+            else if (firstJPEG >= 0) bestProfile[src_idx] = got_profiles[firstJPEG];
+            else bestProfile[src_idx] = got_profiles[firstOther];
+        }
+
+        try {
+            // The ONVIF device may have multiple Video Sources
+            // eg 4 channel IP encoder or Panoramic Cameras
+            // Grab a JPEG Image from each VideoSource
+
+            for (let src_idx = 0; src_idx < got_videosources.length; src_idx++) {
+                const videoSource = got_videosources[src_idx];
+
+                let getUri_result = null;
+                try {
+                    getUri_result = await cam_obj.media.getSnapshotUri({ profileToken: bestProfile[src_idx].token});
+                } catch (err) {
+                    getUri_result = null;
+                }
+
+                if (getUri_result != null) {
+
+                    got_snapshots[src_idx] = {videoSourceToken: videoSource.token, uri: getUri_result.mediaUri.uri};
+
+                    const fs = require('fs');
+                    const url = require('url');
+
+                    let filename = outputfolder + path.sep + start_time_YYYYMMDDHHMMSS + '_snapshot_' + ip_entry;
+                    if (got_videosources.length > 1) {
+                        // add _1, _2, _3 etc for cameras with multiple VideoSources
+                        filename += '_' + (src_idx + 1);
+                    }
+                    filename += '.jpg';
+                    let uri = url.parse(getUri_result.mediaUri.uri);
+
+                    // handle the case where the camera is behind NAT
+                    // ONVIF Standard now says use XAddr for camera
+                    // and ignore the IP address in the Snapshot URI
+                    uri.host = ip_entry;
+                    uri.username = username;
+                    uri.password = password;
+                    if (!uri.port) uri.port = 80;
+
+                    let requestFinished = false;
+                    let digestRequest = require('request-digest')(username, password);
+                    digestRequest.request({
+                        host: 'http://' + uri.host,
+                        path: uri.path,
+                        port: uri.port,
+                        encoding: null, // return data as a Buffer()
+                        method: 'GET'
+                        //                             headers: {
+                        //                               'Custom-Header': 'OneValue',
+                        //                               'Other-Custom-Header': 'OtherValue'
+                        //                             }
+                    }, function (error, response, body) {
+                        if (error) {
+                            // console.log('Error downloading snapshot');
+                            // throw error;
+                        } else {
+
+                            fs.open(filename, 'w', function (err) {
+                                // callback for file opened, or file open error
+                                if (err) {
+                                    console.log('ERROR - cannot create output log file');
+                                    console.log(err);
+                                    console.log('');
+                                    process.exit(1);
+                                }
+                                fs.appendFile(filename, body, function (err) {
+                                    if (err) {
+                                        console.log('Error writing to file');
+                                    }
+                                });
+
+                            });
+                        }
+                        requestFinished = true;
+                    }); // end Request
+
+                    while (requestFinished == false) {
+                        await sleep(25);
+                    }
+                }
+            } // end for each Video source
+            
+        }
+        catch (err) {
+            console.log(err);
+        }
+
+
+        for (let src_idx = 0; src_idx < got_videosources.length; src_idx++) {
+            const profileToken = bestProfile[src_idx].token;
+
+            try {
+                let stream = await cam_obj.media.getStreamUri({
+                    protocol: 'RTSP',
+                    stream: 'RTP-Unicast',
+                    profileToken: profileToken
+                });
+                got_livestreams[src_idx].tcp = stream.mediaUri.uri;
+            } catch (err) {}
+
+            try {
+                let stream = await cam_obj.media.getStreamUri({
+                    protocol: 'UDP',
+                    stream: 'RTP-Unicast',
+                    profileToken: profileToken
+                });
+                got_livestreams[src_idx].udp = stream.mediaUri.uri;
+            } catch (err) {}
+
+            try {
+                let stream = await cam_obj.media.getStreamUri({
+                    protocol: 'HTTP',
+                    stream: 'RTP-Unicast',
+                    profileToken: profileToken
+                });
+                got_livestreams[src_idx].http = stream.mediaUri.uri;
+            } catch (err) {}
+
+            /* Multicast is optional in Profile S, Mandatory in Profile T but could be disabled */
+            try {
+                let stream = await cam_obj.media.getStreamUri({
+                    protocol: 'UDP',
+                    stream: 'RTP-Multicast',
+                    profileToken: profileToken
+                });
+                got_livestreams[src_idx].multicast = stream.mediaUri.uri;
+            } catch (err) {}
+
+            console.log('------------------------------');
+            console.log('Host: ' + ip_entry + ' Port: ' + port);
+            console.log('Date: = ' + timeAndDate.toString());
+            console.log('Info: = ' + JSON.stringify(got_info));
+            console.log('Media2: = ' + cam_obj.media2Support);
+            for (let i = 0; i < got_videosources.length; i++) {
+                let msg = "Video Source " + (i+1) + ' [' + got_videosources[i].token + '] [' + bestProfile[i].videoEncoderConfiguration.encoding + ' '
+                + bestProfile[i].videoEncoderConfiguration.resolution.width + 'x' + bestProfile[i].videoEncoderConfiguration.resolution.height + ']';
+
+                console.log(msg);
+
+                if (got_snapshots[i].uri != null) {
+                    console.log('Snapshot URI: =          ' + got_snapshots[i].uri);
+                }
+                if (got_livestreams[i].tcp != null) {
+                    console.log('Live TCP Stream: =       ' + got_livestreams[i].tcp);
+                }
+                if (got_livestreams[i].udp != null) {
+                    console.log('Live UDP Stream: =       ' + got_livestreams[i].udp);
+                }
+                if (got_livestreams[i].http != null) {
+                    console.log('Live HTTP Stream: =      ' + got_livestreams[i].http);
+                }
+                if (got_livestreams[i].multicast != null) {
+                    console.log('Live Multicast Stream: = ' + got_livestreams[i].multicast);
+                }
+                console.log('------------------------------');
+            }
+
+            let log_filename = outputfolder + path.sep + start_time_YYYYMMDDHHMMSS + '_camera_report_' + ip_entry + '.txt';
+            let log_fd;
+
+            fs.open(log_filename, 'w', function (err, fd) {
+                if (err) {
+                    console.log('ERROR - cannot create output file ' + log_filename);
+                    console.log(err);
+                    console.log('');
+                    process.exit(1);
+                }
+                log_fd = fd;
+                //console.log('Log File Open (' + log_filename + ')');
+
+                // write to log file in the Open callback
+                let msg = "ONVIF Audit (c) 2026 Roger Hardiman RJH Technical Consultancy Ltd www.rjh.org.uk\r\n"
+                msg += 'Host:= ' + ip_entry + ' Port:= ' + port + '\r\n';
+                if (got_date) {
+                    msg += 'Date:= ' + timeAndDate.toString() + '\r\n';
+                    msg += 'Date Details:= ' + JSON.stringify(got_date) + '\r\n';
+                } else {
+                    msg += 'Date:= unknown\r\n';
+                }
+                if (got_info) {
+                    msg += 'Manufacturer:= ' + got_info.manufacturer + '\r\n';
+                    msg += 'Model:= ' + got_info.model + '\r\n';
+                    msg += 'Firmware Version:= ' + got_info.firmwareVersion + '\r\n';
+                    msg += 'Serial Number:= ' + got_info.serialNumber + '\r\n';
+                    msg += 'Hardware ID:= ' + got_info.hardwareId + '\r\n';
+                } else {
+                    msg += 'Manufacturer:= unknown\r\n';
+                    msg += 'Model:= unknown\r\n';
+                    msg += 'Firmware Version:= unknown\r\n';
+                    msg += 'Serial Number:= unknown\r\n';
+                    msg += 'Hardware ID:= unknown\r\n';
+                }
+                for (let i = 0; i < got_videosources.length; i++) {
+                    msg += "Video Source " + (i+1) + ' [' + got_videosources[i].token + '] [' + bestProfile[i].videoEncoderConfiguration.encoding + ' '
+                    + bestProfile[i].videoEncoderConfiguration.resolution.width + 'x' + bestProfile[i].videoEncoderConfiguration.resolution.height + ']\r\n';
+
+                    if (got_snapshots[i].uri != null) {
+                        msg += 'Snapshot URL: =          ' + got_snapshots[i].uri + '\r\n';
+                    }
+
+                    if (got_livestreams[i].tcp != null) {
+                        msg += 'Live TCP Stream: =       ' + got_livestreams[i].tcp + '\r\n';
+                    }
+                    if (got_livestreams[i].udp != null) {
+                        msg += 'Live UDP Stream: =       ' + got_livestreams[i].udp + '\r\n';
+                    }
+                    if (got_livestreams[i].http != null) {
+                        msg += 'Live HTTP Stream: =      ' + got_livestreams[i].http + '\r\n';
+                    }
+                    if (got_livestreams[i].multicast != null) {
+                        msg += 'Live Multicast Stream: = ' + got_livestreams[i].multicast + '\r\n';
+                    }
+                }
+                fs.write(log_fd, msg, function (err) {
+                    if (err)
+                        console.log('Error writing to file');
+                });
+
+                msg = "";
+                for (const item of xmlLog) {
+                    msg += item;
+                }
+
+                fs.write(log_fd, msg, function (err) {
+                    if (err)
+                        console.log('Error writing to file');
+                });
+            });
+
+
+        } // end of video sources loop
     }); // foreach
 }
 
