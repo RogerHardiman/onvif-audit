@@ -127,30 +127,38 @@ if (args.scan) {
                 // For example <MyTag>HELLO</MyTag> does not use the '$' or '_' fields.
                 // To make things easier to handle, we use parser options to place the data we want in a 'payload' field
 
-                let urn = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['EndpointReference'][0]['Address'][0].payload.trim();
-                let xaddrs = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['XAddrs'][0].payload.trim(); // Axis add whitespace on end. Remove it.
-                let scopes = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['Scopes'][0].payload.trim(); // Axis add whitespace on end. Remove it.
-                scopes = scopes.split(" ");
+                // The ONVIF library no longer sends out 'requested scopes' which means
+                // a) my EPSON printer will respond with 'Urn' and 'XAddr' but no 'Scopes'
+                // b) my Windows PCs will respond with an 'XAddr' and possibly 'Types' but no 'Scopes'
 
-                let hardware = "";
-                let name = "";
-                for (let i = 0; i < scopes.length; i++) {
-                    // use decodeUri to conver %20 to ' '
-                    if (scopes[i].includes('onvif://www.onvif.org/name')) name = decodeURI(scopes[i].substring(27));
-                    if (scopes[i].includes('onvif://www.onvif.org/hardware')) hardware = decodeURI(scopes[i].substring(31));
+                try {
+                    let urn = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['EndpointReference'][0]['Address'][0].payload.trim();
+                    let xaddrs = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['XAddrs'][0].payload.trim(); // Axis add whitespace on end. Remove it.
+                    let scopes = result['Envelope']['Body'][0]['ProbeMatches'][0]['ProbeMatch'][0]['Scopes'][0].payload.trim(); // Axis add whitespace on end. Remove it.
+
+                    let hardware = "";
+                    let name = "";
+                    for (let i = 0; i < scopes.length; i++) {
+                        // use decodeUri to conver %20 to ' '
+                        if (scopes[i].includes('onvif://www.onvif.org/name')) name = decodeURI(scopes[i].substring(27));
+                        if (scopes[i].includes('onvif://www.onvif.org/hardware')) hardware = decodeURI(scopes[i].substring(31));
+                    }
+
+                    process.stdout.write("X");
+
+                    const newItem = {
+                        rinfo,
+                        name,
+                        hardware,
+                        xaddrs,
+                        urn,
+                        scopes
+                    };
+		            scanResults.push(newItem);
+                } catch (err) {
+                    // unable to parse the reply. (eg Printer or Windows PC)
+                    process.stdout.write('x');
                 }
-
-                process.stdout.write(".");
-
-                const newItem = {
-                    rinfo,
-                    name,
-                    hardware,
-                    xaddrs,
-                    urn,
-                    scopes
-                };
-		scanResults.push(newItem);
             }
         );
 
