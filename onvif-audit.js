@@ -186,12 +186,9 @@ if (args.scan) {
 
 // program ends here (just functions below)
 
-/** Unwrap Media1/Media2 stream/snapshot URI from onvif@1 response shapes. */
+/** MediaUri.uri from onvif@1 media.getStreamUri / getSnapshotUri (Media2 bridge same shape). */
 function media_uri(result) {
-    if (!result) return null;
-    if (result.uri) return result.uri;
-    if (result.mediaUri && result.mediaUri.uri) return result.mediaUri.uri;
-    return null;
+    return result?.uri || null;
 }
 
 /** Prefer the JS Date attached by onvif@1 getSystemDateAndTime(). */
