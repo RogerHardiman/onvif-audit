@@ -21,7 +21,7 @@
   "dependencies": {
     "commander": "^4.0.1",
     "node-datetime": "^2.1.2",
-    "onvif": "https://github.com/agsh/onvif.git#3fb640b6aabe7c4c7a66eceb8cd05165c8217b8f",
+    "onvif": "https://github.com/rogerhardiman/onvif.git#2ae252ccf4a9690707a5855b0c35ee1eb9c79ed3 ",
     "request-digest": "^1.0.13",
     "xml2js": "^0.6.2"
   },
