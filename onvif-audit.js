@@ -407,7 +407,7 @@ async function perform_audit(ip_addresses, port, username, password, outputfolde
 
                 if (getUri_result != null) {
 
-                    got_snapshots[src_idx] = {videoSourceToken: videoSource.token, uri: getUri_result.mediaUri.uri};
+                    got_snapshots[src_idx] = {videoSourceToken: videoSource.token, uri: getUri_result.uri};
 
                     const fs = require('fs');
                     const url = require('url');
@@ -418,7 +418,7 @@ async function perform_audit(ip_addresses, port, username, password, outputfolde
                         filename += '_' + (src_idx + 1);
                     }
                     filename += '.jpg';
-                    let uri = url.parse(getUri_result.mediaUri.uri);
+                    let uri = url.parse(getUri_result.uri);
 
                     // handle the case where the camera is behind NAT
                     // ONVIF Standard now says use XAddr for camera
@@ -486,7 +486,7 @@ async function perform_audit(ip_addresses, port, username, password, outputfolde
                     stream: 'RTP-Unicast',
                     profileToken: profileToken
                 });
-                got_livestreams[src_idx].tcp = stream.mediaUri.uri;
+                got_livestreams[src_idx].tcp = stream.uri;
             } catch (err) {}
 
             try {
@@ -495,7 +495,7 @@ async function perform_audit(ip_addresses, port, username, password, outputfolde
                     stream: 'RTP-Unicast',
                     profileToken: profileToken
                 });
-                got_livestreams[src_idx].udp = stream.mediaUri.uri;
+                got_livestreams[src_idx].udp = stream.uri;
             } catch (err) {}
 
             try {
@@ -504,7 +504,7 @@ async function perform_audit(ip_addresses, port, username, password, outputfolde
                     stream: 'RTP-Unicast',
                     profileToken: profileToken
                 });
-                got_livestreams[src_idx].http = stream.mediaUri.uri;
+                got_livestreams[src_idx].http = stream.uri;
             } catch (err) {}
 
             /* Multicast is optional in Profile S, Mandatory in Profile T but could be disabled */
@@ -514,7 +514,7 @@ async function perform_audit(ip_addresses, port, username, password, outputfolde
                     stream: 'RTP-Multicast',
                     profileToken: profileToken
                 });
-                got_livestreams[src_idx].multicast = stream.mediaUri.uri;
+                got_livestreams[src_idx].multicast = stream.uri;
             } catch (err) {}
 
             console.log('------------------------------');
